@@ -9,6 +9,10 @@ const els = {
   resetBtn: document.querySelector("#resetBtn"),
   setupSummary: document.querySelector("#setupSummary"),
   startBtn: document.querySelector("#startBtn"),
+  resumeFile: document.querySelector("#resumeFile"),
+  resumeSelectBtn: document.querySelector("#resumeSelectBtn"),
+  resumeApplyBtn: document.querySelector("#resumeApplyBtn"),
+  resumeStatus: document.querySelector("#resumeStatus"),
   lengthShortLabel: document.querySelector("#lengthShortLabel"),
   lengthStandardLabel: document.querySelector("#lengthStandardLabel"),
   lengthDeepLabel: document.querySelector("#lengthDeepLabel"),
@@ -43,6 +47,7 @@ const state = {
   session: null,
   busy: false,
   activeInsight: "risk",
+  resumeDraft: null,
 };
 
 const modeLabels = {
@@ -108,14 +113,17 @@ function setControlsDisabled(disabled) {
     els.sampleBtn,
     els.clearInputsBtn,
     els.resetBtn,
+    els.resumeSelectBtn,
+    els.resumeApplyBtn,
   ].forEach((control) => {
     if (control) control.disabled = disabled;
   });
 }
 
 async function api(path, options = {}) {
+  const isFormData = options.body instanceof FormData;
   const response = await fetch(path, {
-    headers: { "Content-Type": "application/json" },
+    headers: isFormData ? {} : { "Content-Type": "application/json" },
     ...options,
   });
   let payload = null;
@@ -138,6 +146,11 @@ function saveSession(session) {
 
 function clearSavedSession() {
   localStorage.removeItem(STORAGE_KEY);
+}
+
+function renderResumeStatus(kind = "idle", html = "没有简历也没关系，可以继续手动填写。") {
+  els.resumeStatus.className = `resume-status ${kind}`;
+  els.resumeStatus.innerHTML = html;
 }
 
 function getSelectedMode() {
@@ -731,9 +744,85 @@ els.clearInputsBtn.addEventListener("click", () => {
   els.targetProfile.value = "";
   els.project.value = "";
   els.focus.value = "";
+  state.resumeDraft = null;
+  els.resumeApplyBtn.classList.add("hidden");
+  renderResumeStatus();
   updateCharCounts();
   els.major.focus();
 });
+
+els.resumeSelectBtn.addEventListener("click", () => {
+  if (state.busy) return;
+  els.resumeFile.click();
+});
+
+els.resumeFile.addEventListener("change", async () => {
+  if (state.busy) return;
+  const file = els.resumeFile.files?.[0];
+  if (!file) return;
+  if (!file.name.toLowerCase().endsWith(".pdf")) {
+    alert("请上传 PDF 文件。");
+    els.resumeFile.value = "";
+    return;
+  }
+  const formData = new FormData();
+  formData.append("file", file);
+  setBusy(true, "解析简历中", "正在读取 PDF，并整理可用于面试训练的项目与背景。");
+  renderResumeStatus("loading", `<strong>${escapeHtml(file.name)}</strong><span>正在解析，请稍等。</span>`);
+  try {
+    const response = await api("/api/resume/parse", {
+      method: "POST",
+      body: formData,
+    });
+    state.resumeDraft = response.prefill;
+    els.resumeApplyBtn.classList.remove("hidden");
+    renderResumeDraft(response);
+  } catch (error) {
+    state.resumeDraft = null;
+    els.resumeApplyBtn.classList.add("hidden");
+    renderResumeStatus("error", escapeHtml(error.message));
+  } finally {
+    els.resumeFile.value = "";
+    setBusy(false);
+  }
+});
+
+els.resumeApplyBtn.addEventListener("click", () => {
+  if (state.busy || !state.resumeDraft) return;
+  const draft = state.resumeDraft;
+  els.major.value = draft.major || els.major.value;
+  els.targetProfile.value = draft.target_profile || els.targetProfile.value;
+  els.project.value = draft.project || els.project.value;
+  els.focus.value = draft.focus || els.focus.value;
+  updateCharCounts();
+  renderResumeStatus(
+    "success",
+    "已将简历建议应用到表单。你可以继续手动调整，让项目经历更适合本轮训练。",
+  );
+});
+
+function renderResumeDraft(response) {
+  const draft = response.prefill || {};
+  const sourceLabel = response.source === "dashscope" ? "千问已结构化" : "本地解析建议";
+  const warning = response.warning ? `<p class="resume-warning">${escapeHtml(response.warning)}</p>` : "";
+  const projectPreview = draft.project && draft.project.length > 220 ? `${draft.project.slice(0, 220)}...` : draft.project;
+  renderResumeStatus(
+    response.source === "dashscope" ? "success" : "warn",
+    `
+      <div class="resume-result-head">
+        <strong>${escapeHtml(sourceLabel)}</strong>
+        <span>${escapeHtml(draft.source_text_preview || "").length} 字预览</span>
+      </div>
+      <dl class="resume-result-grid">
+        <div><dt>专业背景</dt><dd>${escapeHtml(draft.major || "待补充")}</dd></div>
+        <div><dt>训练目标</dt><dd>${escapeHtml(draft.target_profile || "待补充")}</dd></div>
+        <div><dt>项目经历</dt><dd>${escapeHtml(projectPreview || "待补充")}</dd></div>
+        <div><dt>训练重点</dt><dd>${escapeHtml(draft.focus || "待补充")}</dd></div>
+      </dl>
+      ${warning}
+    `,
+  );
+}
 
 async function resetSession() {
   if (state.busy) return;

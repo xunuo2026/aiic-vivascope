@@ -9,13 +9,23 @@
   <body>
     <div class="app-shell">
       <header class="topbar">
-        <div>
-          <h1>问脉 <span>VivaScope</span></h1>
-          <p class="product-tagline">面向理工科本科生的项目追问与基础知识口试训练工具。</p>
+        <div class="brand-lockup">
+          <div class="brand-seal">问</div>
+          <div>
+            <h1>问脉 <span>VivaScope</span></h1>
+            <p class="product-tagline">面向理工科本科生的项目追问与基础知识口试训练工具。</p>
+          </div>
         </div>
-        <div class="topbar-meta">
-          <span id="healthDot" class="status-dot"></span>
-          <span id="healthText">连接中</span>
+        <div class="topbar-side">
+          <div class="topbar-meta">
+            <span id="healthDot" class="status-dot"></span>
+            <span id="healthText">连接中</span>
+          </div>
+          <div class="topbar-pills">
+            <span>项目追问优先</span>
+            <span>导师画像驱动</span>
+            <span>复盘报告</span>
+          </div>
         </div>
       </header>
 
@@ -41,6 +51,26 @@
           <div id="setupSummary" class="setup-summary hidden"></div>
 
           <form id="setupForm" class="setup-form">
+            <section class="resume-import-card" aria-labelledby="resumeImportTitle">
+              <div>
+                <p class="eyebrow">Resume Import</p>
+                <h3 id="resumeImportTitle">从简历 PDF 自动填表</h3>
+                <p>可选增强：解析简历后生成专业背景、项目经历和训练重点建议，仍可手动修改。</p>
+              </div>
+              <div class="resume-actions">
+                <input id="resumeFile" type="file" accept="application/pdf,.pdf" hidden />
+                <button id="resumeSelectBtn" class="secondary-btn" type="button">
+                  <i data-lucide="file-up"></i>
+                  <span>上传 PDF</span>
+                </button>
+                <button id="resumeApplyBtn" class="ghost-btn hidden" type="button">
+                  <i data-lucide="wand-sparkles"></i>
+                  <span>应用建议</span>
+                </button>
+              </div>
+              <div id="resumeStatus" class="resume-status">没有简历也没关系，可以继续手动填写。</div>
+            </section>
+
             <fieldset>
               <legend>训练模式</legend>
               <div class="segmented-control">

@@ -1,4 +1,5 @@
 from pathlib import Path
+import logging
 import os
 import sys
 
@@ -15,10 +16,45 @@ os.environ["QWEN_MODEL"] = ""
 from app.main import app
 
 
+def fake_resume_pdf() -> bytes:
+    return b"""%PDF-1.4
+1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj
+2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj
+3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >> endobj
+4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj
+5 0 obj << /Length 156 >> stream
+BT /F1 12 Tf 72 720 Td (AI major student. Project: YOLO helmet detection. Built training scripts and evaluated mAP. Target: computer vision lab.) Tj ET
+endstream endobj
+xref
+0 6
+0000000000 65535 f
+0000000009 00000 n
+0000000058 00000 n
+0000000115 00000 n
+0000000253 00000 n
+0000000323 00000 n
+trailer << /Root 1 0 R /Size 6 >>
+startxref
+530
+%%EOF
+"""
+
+
 def main() -> None:
+    logging.getLogger("pypdf").setLevel(logging.ERROR)
     client = TestClient(app)
+    response = client.post(
+        "/api/resume/parse",
+        files={"file": ("resume.pdf", fake_resume_pdf(), "application/pdf")},
+    )
+    response.raise_for_status()
+    resume = response.json()
+    assert resume["prefill"]["project"], resume
+    assert resume["prefill"]["source_text_preview"], resume
+
     knowledge_payload = {
         "mode": "knowledge",
+        "interview_length": "short",
         "scenario": "保研复试",
         "style": "严格导师型",
         "major": "人工智能专业，大三，做过机器学习和计算机视觉课程项目",
@@ -40,6 +76,13 @@ def main() -> None:
     assert low_feedback["strengths"] == [], low_feedback
     assert low_feedback["score_reason"], low_feedback
     assert low_feedback["rewrite"], low_feedback
+    session = response.json()["session"]
+    for _ in range(session["max_rounds"] - len(session["turns"])):
+        response = client.post(f"/api/sessions/{knowledge_session['session_id']}/answer", json={"answer": "我不知道"})
+        response.raise_for_status()
+        session = response.json()["session"]
+    assert session["status"] == "finished"
+    assert session["final_report"]["total_score"] <= 20, session["final_report"]
 
     payload = {
         "mode": "mixed",

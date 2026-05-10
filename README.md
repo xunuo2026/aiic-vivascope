@@ -6,7 +6,7 @@
 
 ## 核心流程
 
-1. 填写面试场景、专业背景、项目经历、训练方向和追问风格。
+1. 手动填写面试场景、专业背景、项目经历、训练方向和追问风格，或上传简历 PDF 生成表单建议。
 2. 选择训练模式：只练基础知识、只练项目追问、综合模拟。
 3. 系统生成项目脉络图、追问风险雷达和必要的知识点清单。
 4. 进入 6 轮连续追问，每轮问题都基于项目脉络、风险维度、知识点和上一轮回答。
@@ -18,6 +18,7 @@
 - 后端：FastAPI + Pydantic
 - 前端：原生 HTML/CSS/JavaScript
 - 模型：阿里云百炼 / DashScope 千问模型，使用 OpenAI-compatible Chat Completions endpoint
+- 简历导入：PDF 文本提取 + 千问结构化建议 + 本地启发式兜底
 - 会话：后端内存状态 + 前端 localStorage 快照恢复
 - 数据库：无
 - 登录系统：无
@@ -117,6 +118,7 @@ sudo ufw allow 8000/tcp
 ## API 概览
 
 - `GET /health`：健康检查和模型配置状态
+- `POST /api/resume/parse`：上传 PDF 简历并生成表单填充建议
 - `POST /api/sessions`：创建训练会话并生成初始分析
 - `GET /api/sessions/{session_id}`：读取会话
 - `POST /api/sessions/{session_id}/answer`：提交一轮回答，获得即时反馈和下一题

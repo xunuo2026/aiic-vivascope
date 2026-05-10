@@ -109,3 +109,17 @@ class AnswerResponse(BaseModel):
 
 class RestoreRequest(BaseModel):
     session: SessionState
+
+
+class ResumePrefill(BaseModel):
+    major: str = ""
+    target_profile: str = ""
+    project: str = ""
+    focus: str = ""
+    source_text_preview: str = ""
+
+
+class ResumeParseResponse(BaseModel):
+    prefill: ResumePrefill
+    source: str = "local_fallback"
+    warning: str = ""

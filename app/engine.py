@@ -103,7 +103,8 @@ class InterviewEngine:
             session.ai_source = "local_fallback"
             return fallback
         try:
-            return FinalReport.model_validate(result.get("final_report", result))
+            report = FinalReport.model_validate(result.get("final_report", result))
+            return self._calibrate_final_report(session, report)
         except ValidationError:
             return fallback
 
@@ -247,6 +248,7 @@ class InterviewEngine:
                 "content": (
                     f"完整会话 JSON：{self._session_brief(session, include_turns=True)}\n"
                     "请生成最终复盘。必须包含：总评分、项目最容易被问穿的点、知识薄弱点、表达问题、下一轮训练任务。"
+                    "total_score 必须等于所有轮次 feedback.score 的平均值四舍五入，不能自行抬高。"
                     "还必须用 2-3 句话简短总结用户本轮所有回答的总体表现，并给出一句直接、可执行的总体建议。"
                     "返回 JSON 格式："
                     "{"
@@ -410,6 +412,12 @@ class InterviewEngine:
         if not answer_text.strip():
             return ""
         return "建议改成：先给直接结论，再补关键依据、一个可量化证据，最后说明局限或下一步验证方式。"
+
+    def _calibrate_final_report(self, session: SessionState, report: FinalReport) -> FinalReport:
+        scores = [turn.feedback.score for turn in session.turns]
+        if scores:
+            report.total_score = round(sum(scores) / len(scores))
+        return report
 
     def _fallback_initial(self, request: StartRequest) -> dict:
         needs_project = request.mode in {"project", "mixed"}

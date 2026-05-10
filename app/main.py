@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -11,7 +11,8 @@ from fastapi.staticfiles import StaticFiles
 from app.config import get_settings
 from app.engine import InterviewEngine
 from app.llm_client import LLMClient
-from app.schemas import AnswerRequest, AnswerResponse, RestoreRequest, StartRequest, StartResponse
+from app.resume_parser import extract_pdf_text, heuristic_resume_prefill, merge_prefill, resume_prefill_messages
+from app.schemas import AnswerRequest, AnswerResponse, RestoreRequest, ResumeParseResponse, StartRequest, StartResponse
 from app.session_store import store
 
 
@@ -58,6 +59,29 @@ async def create_session(request: StartRequest) -> StartResponse:
     return StartResponse(session=session)
 
 
+@app.post("/api/resume/parse", response_model=ResumeParseResponse)
+async def parse_resume(file: UploadFile = File(...)) -> ResumeParseResponse:
+    filename = file.filename or ""
+    if file.content_type not in {"application/pdf", "application/octet-stream"} and not filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=415, detail="请上传 PDF 格式的简历。")
+    content = await file.read()
+    if len(content) > 8 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="PDF 文件过大，请控制在 8MB 以内。")
+    try:
+        text = extract_pdf_text(content)
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"PDF 解析失败：{exc}") from exc
+    if len(text) < 40:
+        raise HTTPException(status_code=422, detail="未能从 PDF 中读取到足够文本，请改用手动填写。")
+
+    fallback = heuristic_resume_prefill(text)
+    result = await llm_client.complete_json(resume_prefill_messages(text), temperature=0.2, timeout_seconds=45)
+    prefill = merge_prefill(fallback, result)
+    source = "dashscope" if result else "local_fallback"
+    warning = "" if result else llm_client.last_error
+    return ResumeParseResponse(prefill=prefill, source=source, warning=warning)
+
+
 @app.get("/api/sessions/{session_id}", response_model=StartResponse)
 async def get_session(session_id: str) -> StartResponse:
     session = store.get(session_id)
@@ -97,4 +121,3 @@ async def delete_session(session_id: str) -> dict[str, str]:
 
 if __name__ == "__main__":
     uvicorn.run("app.main:app", host=settings.app_host, port=settings.app_port, reload=True)
-
