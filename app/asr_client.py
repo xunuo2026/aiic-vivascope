@@ -35,7 +35,7 @@ class DashScopeASRClient:
                 "type": "session.update",
                 "session": {
                     "modalities": ["text"],
-                    "input_audio_format": "pcm16",
+                    "input_audio_format": "pcm",
                     "sample_rate": 16000,
                     "input_audio_transcription": {
                         "language": "zh",
