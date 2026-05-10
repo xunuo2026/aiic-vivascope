@@ -27,6 +27,7 @@ html {
 body {
   margin: 0;
   min-height: 100vh;
+  overflow-x: hidden;
   color: var(--ink);
   background:
     linear-gradient(135deg, rgba(18, 105, 93, 0.1), rgba(111, 63, 104, 0.06) 44%, rgba(185, 120, 24, 0.06)),
@@ -60,10 +61,17 @@ button {
   display: grid;
   min-height: calc(100vh - 44px);
   overflow: hidden;
+  isolation: isolate;
   border: 1px solid rgba(215, 222, 217, 0.92);
   border-radius: 8px;
   box-shadow: var(--shadow);
   background: #0c4d45;
+  animation: landingReveal 860ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.landing-screen.is-leaving {
+  animation: landingExit 680ms cubic-bezier(0.72, 0, 0.22, 1) both;
+  pointer-events: none;
 }
 
 .landing-bg {
@@ -72,6 +80,8 @@ button {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  transform: scale(1.04);
+  animation: heroDrift 18s ease-in-out infinite alternate;
 }
 
 .landing-shade {
@@ -107,8 +117,8 @@ button {
 }
 
 .landing-brand img {
-  width: 42px;
-  height: 42px;
+  width: 48px;
+  height: 48px;
   border-radius: 8px;
   box-shadow: 0 12px 24px rgba(0, 0, 0, 0.22);
 }
@@ -125,8 +135,20 @@ button {
 
 .landing-content {
   align-self: center;
-  max-width: 780px;
-  padding: clamp(54px, 8vw, 110px) 26px 28px;
+  max-width: 920px;
+  padding: 88px 26px 36px;
+  animation: heroCopyEnter 900ms 160ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.landing-hero-mark {
+  width: 132px;
+  height: 132px;
+  margin-bottom: 24px;
+  border-radius: 8px;
+  box-shadow:
+    0 26px 55px rgba(0, 0, 0, 0.34),
+    0 0 0 1px rgba(255, 255, 255, 0.2);
+  animation: heroMarkFloat 4.8s ease-in-out infinite;
 }
 
 .landing-content .eyebrow {
@@ -137,16 +159,26 @@ button {
   margin: 0;
   max-width: 760px;
   color: #fffdf7;
-  font-size: clamp(46px, 8vw, 94px);
+  font-size: 86px;
   line-height: 0.98;
   font-weight: 900;
+  text-shadow: 0 16px 42px rgba(0, 0, 0, 0.34);
+}
+
+.landing-slogan {
+  max-width: 780px;
+  margin: 18px 0 0;
+  color: #f3dfb3;
+  font-size: 36px;
+  line-height: 1.18;
+  font-weight: 850;
 }
 
 .landing-copy {
   max-width: 680px;
   margin: 22px 0 0;
   color: rgba(255, 253, 247, 0.84);
-  font-size: clamp(17px, 2vw, 22px);
+  font-size: 20px;
   line-height: 1.7;
 }
 
@@ -159,6 +191,7 @@ button {
 
 .landing-primary,
 .landing-secondary {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -168,6 +201,32 @@ button {
   border-radius: 8px;
   font-weight: 850;
   border: 1px solid transparent;
+  overflow: hidden;
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    border-color 180ms ease,
+    background 180ms ease;
+}
+
+.landing-primary::after,
+.landing-secondary::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background: linear-gradient(110deg, transparent, rgba(255, 255, 255, 0.36), transparent);
+  transform: translateX(-120%);
+  transition: transform 520ms ease;
+}
+
+.landing-primary:hover,
+.landing-secondary:hover {
+  transform: translateY(-2px);
+}
+
+.landing-primary:hover::after,
+.landing-secondary:hover::after {
+  transform: translateX(120%);
 }
 
 .landing-primary {
@@ -199,6 +258,19 @@ button {
   min-width: 0;
   padding: 18px;
   background: rgba(255, 255, 255, 0.11);
+  animation: capabilityEnter 720ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.landing-capabilities div:nth-child(1) {
+  animation-delay: 220ms;
+}
+
+.landing-capabilities div:nth-child(2) {
+  animation-delay: 320ms;
+}
+
+.landing-capabilities div:nth-child(3) {
+  animation-delay: 420ms;
 }
 
 .landing-capabilities strong,
@@ -221,6 +293,145 @@ button {
   display: block;
 }
 
+.workbench-shell.is-entering {
+  animation: workbenchEnter 720ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes landingReveal {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes landingExit {
+  to {
+    opacity: 0;
+    transform: translateX(-42px) scale(0.985);
+    filter: blur(6px);
+  }
+}
+
+@keyframes workbenchEnter {
+  from {
+    opacity: 0;
+    transform: translateX(46px) scale(0.992);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes heroDrift {
+  from {
+    transform: scale(1.04) translate3d(0, 0, 0);
+  }
+
+  to {
+    transform: scale(1.09) translate3d(-18px, -10px, 0);
+  }
+}
+
+@keyframes heroCopyEnter {
+  from {
+    opacity: 0;
+    transform: translateY(26px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes heroMarkFloat {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-9px);
+  }
+}
+
+@keyframes capabilityEnter {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes panelRise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes loadingSlide {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes riskGrow {
+  from {
+    transform: scaleX(0);
+  }
+
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes stageFocusIn {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes questionReveal {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .topbar {
   display: flex;
   align-items: center;
@@ -228,11 +439,14 @@ button {
   gap: 16px;
   margin-bottom: 20px;
   padding: 18px;
-  background: rgba(255, 255, 255, 0.88);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.94), rgba(246, 248, 245, 0.9)),
+    rgba(255, 255, 255, 0.88);
   border-radius: 8px;
   border: 1px solid rgba(215, 222, 217, 0.9);
   box-shadow: var(--shadow);
   backdrop-filter: blur(18px);
+  animation: panelRise 620ms 120ms ease both;
 }
 
 .brand-lockup {
@@ -258,7 +472,7 @@ button {
 }
 
 .topbar h1 {
-  font-size: clamp(28px, 4vw, 42px);
+  font-size: 40px;
   line-height: 1;
   font-weight: 800;
 }
@@ -354,6 +568,7 @@ button {
   border: 1px solid rgba(215, 222, 217, 0.92);
   box-shadow: var(--shadow);
   backdrop-filter: blur(14px);
+  animation: panelRise 660ms ease both;
 }
 
 .setup-panel {
@@ -713,7 +928,7 @@ button svg {
 
 .empty-state h2 {
   max-width: 680px;
-  font-size: clamp(28px, 4vw, 44px);
+  font-size: 42px;
   line-height: 1.12;
 }
 
@@ -749,6 +964,7 @@ button svg {
   box-shadow: var(--shadow-soft);
   backdrop-filter: blur(12px);
   text-align: left;
+  animation: loadingSlide 360ms ease both;
 }
 
 .loading-overlay strong {
@@ -879,6 +1095,8 @@ button svg {
 .risk-bar {
   height: 100%;
   background: var(--amber);
+  transform-origin: left center;
+  animation: riskGrow 720ms ease both;
 }
 
 .risk-item.high .risk-bar {
@@ -1155,6 +1373,7 @@ button svg {
   border: 1px solid #cbd8d2;
   border-radius: 8px;
   box-shadow: 0 20px 45px rgba(18, 105, 93, 0.1);
+  animation: stageFocusIn 520ms ease both;
 }
 
 .question-head {
@@ -1175,9 +1394,10 @@ button svg {
 
 .question-text {
   margin: 14px 0 22px;
-  font-size: clamp(26px, 3.5vw, 40px);
+  font-size: 36px;
   line-height: 1.35;
   font-weight: 850;
+  animation: questionReveal 420ms ease both;
 }
 
 .stage-layout .answer-form textarea {
@@ -1293,11 +1513,21 @@ button svg {
   border: 1px solid var(--line);
   border-radius: 8px;
   overflow: hidden;
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease,
+    border-color 160ms ease;
 }
 
 .turn-detail[open] {
   border-color: #c9ded7;
   box-shadow: 0 8px 24px rgba(18, 105, 93, 0.05);
+}
+
+.turn-detail:hover {
+  transform: translateY(-1px);
+  border-color: #bdd5ce;
+  box-shadow: 0 10px 24px rgba(18, 105, 93, 0.06);
 }
 
 .turn-detail summary {
@@ -1368,6 +1598,14 @@ button svg {
 }
 
 @media (max-width: 1120px) {
+  .landing-content h1 {
+    font-size: 68px;
+  }
+
+  .landing-slogan {
+    font-size: 30px;
+  }
+
   .workspace {
     grid-template-columns: 1fr;
   }
@@ -1410,7 +1648,25 @@ button svg {
   }
 
   .landing-content {
-    padding: 42px 18px 24px;
+    padding: 38px 18px 24px;
+  }
+
+  .landing-hero-mark {
+    width: 92px;
+    height: 92px;
+    margin-bottom: 18px;
+  }
+
+  .landing-content h1 {
+    font-size: 48px;
+  }
+
+  .landing-slogan {
+    font-size: 26px;
+  }
+
+  .landing-copy {
+    font-size: 16px;
   }
 
   .landing-actions,
@@ -1472,8 +1728,12 @@ button svg {
     padding: 20px;
   }
 
+  .empty-state h2 {
+    font-size: 30px;
+  }
+
   .question-text {
-    font-size: 22px;
+    font-size: 24px;
   }
 
   .stage-layout .question-panel {
@@ -1487,5 +1747,16 @@ button svg {
 
   .turn-detail summary p {
     white-space: normal;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
   }
 }

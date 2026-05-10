@@ -156,12 +156,21 @@ function clearSavedSession() {
 }
 
 function showWorkbench() {
+  if (state.workbenchOpen) return;
   state.workbenchOpen = true;
-  els.landingScreen.classList.add("hidden");
-  els.workbenchShell.classList.remove("hidden");
+  els.landingScreen.classList.add("is-leaving");
   document.body.classList.add("workbench-open");
-  window.scrollTo({ top: 0, behavior: "smooth" });
-  renderIcons();
+  window.setTimeout(() => {
+    els.landingScreen.classList.add("hidden");
+    els.landingScreen.classList.remove("is-leaving");
+    els.workbenchShell.classList.remove("hidden");
+    els.workbenchShell.classList.add("is-entering");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    renderIcons();
+    window.setTimeout(() => {
+      els.workbenchShell.classList.remove("is-entering");
+    }, 760);
+  }, 650);
 }
 
 function renderResumeStatus(kind = "idle", html = "没有简历也没关系，可以继续手动填写。") {
