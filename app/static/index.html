@@ -94,12 +94,33 @@
             </div>
 
             <label>
-              <span>专业背景</span>
+              <span class="label-row">
+                <span>专业背景</span>
+                <small data-counter-for="major">0 / 120</small>
+              </span>
               <input id="major" name="major" required maxlength="120" placeholder="例如：人工智能专业，大三，做过机器学习课程项目" />
             </label>
 
             <label>
-              <span>项目经历</span>
+              <span class="label-row">
+                <span>申请/面试目标</span>
+                <small data-counter-for="targetProfile">0 / 1200</small>
+              </span>
+              <textarea
+                id="targetProfile"
+                name="target_profile"
+                rows="4"
+                maxlength="1200"
+                placeholder="例如：保研申请某导师的具身智能与机器人方向；或技术实习岗位要求包括目标检测、模型部署和数据分析。"
+              ></textarea>
+              <p class="field-hint">基础知识问诊会优先参考这里，项目追问也会按目标方向调整标准。</p>
+            </label>
+
+            <label>
+              <span class="label-row">
+                <span>项目经历</span>
+                <small data-counter-for="project">0 / 6000</small>
+              </span>
               <textarea
                 id="project"
                 name="project"
@@ -110,7 +131,10 @@
             </label>
 
             <label>
-              <span>想重点训练的方向</span>
+              <span class="label-row">
+                <span>想重点训练的方向</span>
+                <small data-counter-for="focus">0 / 800</small>
+              </span>
               <textarea
                 id="focus"
                 name="focus"
@@ -173,6 +197,7 @@
                 <form id="answerForm" class="answer-form">
                   <textarea id="answerInput" rows="7" maxlength="5000" placeholder="像真实口试一样作答：先给结论，再补依据、数据和局限。"></textarea>
                   <div class="form-actions">
+                    <span class="answer-counter" data-counter-for="answerInput">0 / 5000</span>
                     <button id="answerBtn" class="primary-btn" type="submit">
                       <i data-lucide="send"></i>
                       <span>提交回答</span>

@@ -75,6 +75,7 @@ class InterviewEngine:
             if result is None:
                 session.ai_source = "local_fallback"
 
+        feedback = self._calibrate_feedback_score(feedback, answer_text)
         turn = Turn(
             round_index=round_index,
             question=session.current_question,
@@ -115,7 +116,7 @@ class InterviewEngine:
             else "project_map 必须为 null，risk_radar 必须为空数组。"
         )
         knowledge_rule = (
-            "必须生成 knowledge_points，知识点要贴合专业背景、项目经历和面试场景。"
+            "必须生成 knowledge_points。知识点必须优先贴合申请/面试目标，其次参考专业背景，最后才少量参考项目经历。"
             if needs_knowledge
             else "knowledge_points 可为空数组，只保留项目追问需要的少量相关知识点。"
         )
@@ -125,6 +126,7 @@ class InterviewEngine:
                 "content": (
                     "你是“问脉 VivaScope”的 AI 口试训练引擎，服务理工科本科生。"
                     "你的核心任务不是闲聊，而是先结构化分析项目经历，再围绕项目脉络和漏洞连续追问。"
+                    "基础知识问诊的选题必须优先来自用户申请的导师方向、实验室方向、岗位 JD 或具体面试要求。"
                     "生成的 opening_question 必须像真实面试官当场提问，不要暴露产品流程、训练模式或系统分析依据。"
                     "问题中禁止出现“请结合某某面试场景”“根据风险雷达”“知识点清单”“项目脉络图”等系统化措辞。"
                     "请只返回严格 JSON，不要 Markdown，不要解释 JSON 外的内容。"
@@ -137,6 +139,7 @@ class InterviewEngine:
                     f"训练长度：{request.interview_length}（共 {self._round_count(request)} 轮）\n"
                     f"面试场景：{request.scenario}\n"
                     f"专业背景：{request.major}\n"
+                    f"申请/面试目标：{request.target_profile or '未特别说明'}\n"
                     f"追问风格：{request.style}\n"
                     f"用户想训练方向：{request.focus or '未特别说明'}\n"
                     f"项目经历：{request.project or '未提供完整项目'}\n\n"
@@ -146,7 +149,7 @@ class InterviewEngine:
                     "风险 level 为 1-5，5 代表最容易被问穿。"
                     "opening_question 必须是第一轮面试问题，不能是寒暄，必须能开启连续追问。"
                     "场景只影响你判断追问严厉程度和考察重点，不要把场景名机械写进问题。"
-                    "基础知识问题也必须自然，像老师直接问“你怎么判断模型没有过拟合？”，不要说“为什么可能被问到”。\n\n"
+                    "基础知识问题必须是直接知识题，像老师直接问“过拟合在训练曲线上怎么体现？”，不要包装成项目追问，不要说“为什么可能被问到”。\n\n"
                     "返回 JSON 格式：\n"
                     "{"
                     '"project_map":{"theme":"","motivation":"","methods":[],"evidence":[],"results":[],"contribution":[]} 或 null,'
@@ -169,8 +172,9 @@ class InterviewEngine:
                     "每轮必须基于项目脉络、风险雷达、知识点清单和上一轮回答继续追问，不能随机出通用题。"
                     "你可以使用这些分析依据，但不能在问题里说出“风险雷达”“知识点清单”“训练模式”“本系统”等产品词。"
                     "问题必须像真实老师/导师当面追问，直接、自然、可回答。"
-                    "综合模拟需要分阶段：项目追问阶段只深挖项目，基础知识问诊阶段从项目相关概念自然切入。"
+                    "综合模拟需要分阶段：项目追问阶段只深挖项目，基础知识问诊阶段问申请目标/岗位要求相关的直接知识题。"
                     "每轮反馈要短，但要具体指出漏洞和更稳妥的回答框架。"
+                    "评分必须严格：回答“我不会”“不知道”、基本空白或明显逃避时给 0-20 分；只有空泛概念无依据给 21-45 分；有结构但缺证据给 46-70 分；具体、准确、有证据和边界才给 71 分以上。"
                     "请只返回严格 JSON。"
                 ),
             },
@@ -186,7 +190,7 @@ class InterviewEngine:
                     "请给出本轮即时反馈，并生成下一轮追问。"
                     "下一轮问题必须承接用户回答中的具体表述，同时符合下一轮阶段。"
                     "若下一轮是项目追问，必须落到项目动机、方法选择、可靠性、贡献、结果解释、创新不足中的一个漏洞。"
-                    "若下一轮是基础知识问诊，必须从项目细节自然切入，例如“你刚才说 mAP 提升，你怎么判断不是过拟合造成的？”"
+                    "若下一轮是基础知识问诊，必须优先依据申请/面试目标和专业背景提出直接知识题，项目经历只可用于选择相关概念，不要追问项目实现细节。"
                     "若追问风格是压力追问型，问题可以更尖锐，但不要羞辱用户。\n\n"
                     "返回 JSON 格式："
                     "{"
@@ -203,6 +207,7 @@ class InterviewEngine:
                 "role": "system",
                 "content": (
                     "你是问脉 VivaScope 的口试反馈教练。请只返回严格 JSON。"
+                    "评分必须严格：回答“我不会”“不知道”、基本空白或明显逃避时给 0-20 分；只有空泛概念无依据给 21-45 分；具体、准确、有证据和边界才给高分。"
                 ),
             },
             {
@@ -319,6 +324,19 @@ class InterviewEngine:
         except ValidationError:
             return fallback_feedback
 
+    def _calibrate_feedback_score(self, feedback: Feedback, answer_text: str) -> Feedback:
+        answer = answer_text.strip()
+        low_effort = re.fullmatch(r"(我不会|不会|不知道|不清楚|没想过|不了解|不太懂|不知道。|我不知道。|不会。|不清楚。)", answer)
+        if not answer:
+            feedback.score = 0
+        elif low_effort:
+            feedback.score = min(feedback.score, 15)
+        elif len(answer) < 12:
+            feedback.score = min(feedback.score, 25)
+        elif len(answer) < 35 and not re.search(r"因为|所以|例如|数据|指标|实验|对比|条件|假设|局限", answer):
+            feedback.score = min(feedback.score, 40)
+        return feedback
+
     def _fallback_initial(self, request: StartRequest) -> dict:
         needs_project = request.mode in {"project", "mixed"}
         needs_knowledge = request.mode in {"knowledge", "mixed"}
@@ -366,24 +384,31 @@ class InterviewEngine:
         return [RiskItem(dimension=k, level=v[0], reason=v[1]) for k, v in heuristics.items()]
 
     def _fallback_knowledge(self, request: StartRequest) -> list[KnowledgePoint]:
-        text = f"{request.major} {request.project} {request.focus}".lower()
+        primary_text = f"{request.target_profile} {request.major} {request.focus}".lower()
+        text = f"{primary_text} {request.project}".lower()
         points: list[KnowledgePoint] = []
         def add(name: str, why: str, probe: str) -> None:
             points.append(KnowledgePoint(name=name, why_relevant=why, probe_example=probe))
 
+        if re.search("具身|机器人|机械臂|操作|导航|控制|强化学习|运动规划", primary_text):
+            add("机器人感知-决策-控制链路", "申请目标涉及机器人或具身智能时，老师常检查你是否理解系统链路。", "机器人从视觉输入到执行动作通常经过哪些模块？")
+            add("运动规划与闭环控制", "机器人方向常追问规划结果如何变成稳定执行。", "路径规划和轨迹跟踪有什么区别？")
+        if re.search("多模态|视觉语言|vlm|clip|图文|语音|融合", primary_text):
+            add("多模态特征融合", "多模态方向会考察不同模态如何对齐和融合。", "早期融合和后期融合各有什么优缺点？")
+            add("对比学习与表征对齐", "视觉语言模型常用对比学习解释跨模态匹配。", "CLIP 的对比学习目标在优化什么？")
         if re.search("计算机|人工智能|机器学习|深度|算法|python|模型|分类|检测|神经|transformer|cnn", text):
-            add("模型泛化与过拟合", "项目答辩中常被用来检查训练结果是否可靠。", "你如何判断模型不是只记住了训练集？")
-            add("评价指标与数据划分", "技术面试会追问指标是否匹配任务目标。", "为什么用这个指标，而不是准确率或均方误差？")
-        if re.search("电子|通信|信号|自动化|控制|传感|嵌入式", text):
-            add("信号噪声与滤波", "实验或工程实现经常受噪声、采样率和滤波策略影响。", "你的系统如何区分有效信号和噪声？")
-            add("闭环控制与稳定性", "自动化和工程项目容易被追问系统稳定性。", "如果外部扰动变大，控制策略是否仍然稳定？")
+            add("模型泛化与过拟合", "目标方向或技术面试常检查你是否理解训练结果的可靠性。", "过拟合在训练曲线和验证曲线上分别怎么体现？")
+            add("评价指标与数据划分", "技术面试会追问指标是否匹配任务目标。", "分类、检测和回归任务分别适合哪些常见评价指标？")
+        if re.search("电子|通信|信号|自动化|传感|嵌入式", text):
+            add("信号噪声与滤波", "电子信息或自动化方向经常考察噪声、采样率和滤波策略。", "低通滤波、高通滤波和带通滤波分别适合什么信号？")
+            add("闭环控制与稳定性", "控制和工程岗位常检查系统稳定性。", "什么是闭环控制？它相比开环控制的优势和风险是什么？")
         if re.search("物理|材料|化学|实验|表征|力学|光学", text):
-            add("误差分析与不确定度", "实验项目最容易被问到结果可信度。", "你的误差主要来自仪器、样品还是模型假设？")
-            add("变量控制与对照实验", "答辩中会检查结论是否由实验设计支撑。", "你如何证明结果不是由其他变量造成的？")
+            add("误差分析与不确定度", "实验类复试常检查结果可信度。", "系统误差和随机误差有什么区别？")
+            add("变量控制与对照实验", "科研答辩会检查结论是否由实验设计支撑。", "为什么对照实验能够帮助排除混杂变量？")
         if not points:
             add("核心概念定义与适用条件", "任何理工科口试都会先检查概念是否说得准。", "请定义项目里最核心的概念，并说明它在哪些条件下不适用。")
             add("方法假设与边界条件", "面试官会通过假设条件判断你是否真正理解方法。", "如果关键假设不成立，你的方法会出现什么问题？")
-        add("结果解释与反例意识", "复试和答辩常通过追问异常结果来判断科研训练。", "如果结果不符合预期，你会优先检查哪三个环节？")
+        add("结果解释与反例意识", "理工科口试常通过异常结果判断科研训练。", "如果实验或模型结果不符合预期，你会优先检查哪三个环节？")
         return points[:5]
 
     def _fallback_feedback(self, session: SessionState, answer_text: str) -> Feedback:
@@ -391,6 +416,20 @@ class InterviewEngine:
         strengths = []
         gaps = []
         suggestions = []
+
+        low_effort = re.fullmatch(
+            r"(我不会|不会|不知道|不清楚|没想过|不了解|不太懂|不知道。|我不知道。|不会。|不清楚。)",
+            answer,
+        )
+        if not answer or low_effort:
+            return Feedback(
+                strengths=[],
+                gaps=["回答基本没有提供可判断的信息，真实面试里会被继续追问。"],
+                suggestions=["即使不确定，也要先说出你能确定的定义、判断依据和一个排查方向。"],
+                answer_frame=["先承认不确定的部分", "补一个你确定的基础定义", "说出可能的判断依据", "给出下一步查证方式"],
+                score=0 if not answer else 12,
+            )
+
         if len(answer) >= 80:
             strengths.append("回答有一定展开，不是只给结论。")
         else:
@@ -410,7 +449,7 @@ class InterviewEngine:
         else:
             gaps.append("方法选择或结果解释的因果链还不明显。")
             suggestions.append("用“为什么这样选、代价是什么、如何验证”补齐逻辑链。")
-        score = min(88, max(52, 58 + len(strengths) * 8 - len(gaps) * 4))
+        score = min(88, max(18, 34 + len(strengths) * 12 - len(gaps) * 7))
         return Feedback(
             strengths=strengths or ["能正面回应问题。"],
             gaps=gaps or ["可以进一步压缩铺垫，把证据放在更靠前的位置。"],
@@ -420,23 +459,15 @@ class InterviewEngine:
         )
 
     def _fallback_next_question(self, session: SessionState, round_number: int) -> str:
-        mode = session.input.mode
         phase = self._phase_for_round(session, round_number)
         if phase == "knowledge":
             points = session.knowledge_points or self._fallback_knowledge(session.input)
             point = points[(round_number - 1) % len(points)]
-            if mode == "mixed":
-                templates = [
-                    f"你刚才的项目解释里有一个关键基础问题：{point.probe_example}",
-                    f"你提到的方法和结果都依赖“{point.name}”。这个概念如果理解错，会怎样影响你的实验结论？",
-                    f"如果老师继续追问“{point.name}”的适用条件，你会怎么用项目里的例子说明？",
-                ]
-            else:
-                templates = [
-                    f"刚才你提到的解释还可以更落到条件上。请说明“{point.name}”成立需要哪些前提？如果前提不满足，会出现什么误判？",
-                    f"你能用一个具体例子说明“{point.name}”会怎样影响方法选择或结果解释吗？",
-                    f"如果让你把“{point.name}”讲给不做这个方向的老师听，你会如何用 3 句话讲清楚？",
-                ]
+            templates = [
+                f"我们换到基础知识。{point.probe_example}",
+                f"请直接说明“{point.name}”的定义、适用条件和一个常见误区。",
+                f"如果我追问“{point.name}”的边界条件，你会怎么回答？",
+            ]
             return templates[(round_number - 1) % len(templates)]
 
         risk = (session.risk_radar or self._fallback_risks(session.input))[(round_number - 1) % 6]
@@ -501,6 +532,7 @@ class InterviewEngine:
             "max_rounds": session.max_rounds,
             "scenario": session.input.scenario,
             "major": session.input.major,
+            "target_profile": session.input.target_profile,
             "focus": session.input.focus,
             "style": session.input.style,
             "project_map": session.project_map.model_dump() if session.project_map else None,

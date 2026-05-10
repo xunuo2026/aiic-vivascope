@@ -15,6 +15,7 @@ const els = {
   scenario: document.querySelector("#scenario"),
   style: document.querySelector("#style"),
   major: document.querySelector("#major"),
+  targetProfile: document.querySelector("#targetProfile"),
   project: document.querySelector("#project"),
   focus: document.querySelector("#focus"),
   emptyState: document.querySelector("#emptyState"),
@@ -136,6 +137,7 @@ function collectStartPayload() {
     scenario: els.scenario.value,
     style: els.style.value,
     major: els.major.value.trim(),
+    target_profile: els.targetProfile.value.trim(),
     project: els.project.value.trim(),
     focus: els.focus.value.trim(),
   };
@@ -162,6 +164,34 @@ function updateLengthLabels() {
       : "单项训练可选快速、标准、深度：3、6、9 轮。";
 }
 
+function updateSegmentedIndicators() {
+  document.querySelectorAll(".segmented-control").forEach((control) => {
+    const inputs = [...control.querySelectorAll('input[type="radio"]')];
+    const index = Math.max(0, inputs.findIndex((input) => input.checked));
+    control.dataset.activeIndex = String(index);
+  });
+}
+
+function updateCharCount(field) {
+  if (!field) return;
+  const counter = document.querySelector(`[data-counter-for="${field.id}"]`);
+  if (!counter) return;
+  const max = field.getAttribute("maxlength") || "∞";
+  counter.textContent = `${field.value.length} / ${max}`;
+  counter.classList.toggle("near-limit", field.maxLength > 0 && field.value.length > field.maxLength * 0.86);
+}
+
+function updateCharCounts() {
+  [els.major, els.targetProfile, els.project, els.focus, els.answerInput].forEach(updateCharCount);
+}
+
+function initCharCounters() {
+  [els.major, els.targetProfile, els.project, els.focus, els.answerInput].forEach((field) => {
+    field?.addEventListener("input", () => updateCharCount(field));
+  });
+  updateCharCounts();
+}
+
 function fillFormFromSession(session) {
   if (!session) return;
   const input = session.input;
@@ -172,8 +202,12 @@ function fillFormFromSession(session) {
   els.scenario.value = input.scenario;
   els.style.value = input.style;
   els.major.value = input.major;
+  els.targetProfile.value = input.target_profile || "";
   els.project.value = input.project || "";
   els.focus.value = input.focus || "";
+  updateLengthLabels();
+  updateSegmentedIndicators();
+  updateCharCounts();
 }
 
 function renderIcons() {
@@ -256,6 +290,11 @@ function renderSetupSummary(session) {
           <dt>专业背景</dt>
           <dd>${escapeHtml(input.major)}</dd>
         </div>
+        ${
+          input.target_profile
+            ? `<div><dt>申请目标</dt><dd>${escapeHtml(input.target_profile)}</dd></div>`
+            : ""
+        }
         <div>
           <dt>${input.mode === "knowledge" ? "训练重点" : "项目摘要"}</dt>
           <dd>${escapeHtml(shortProjectTitle)}</dd>
@@ -580,6 +619,7 @@ els.setupForm.addEventListener("submit", async (event) => {
     state.activeInsight = "risk";
     saveSession(state.session);
     els.answerInput.value = "";
+    updateCharCount(els.answerInput);
     render();
   } catch (error) {
     alert(error.message);
@@ -591,6 +631,9 @@ els.setupForm.addEventListener("submit", async (event) => {
 els.setupForm.addEventListener("change", (event) => {
   if (event.target.name === "mode") {
     updateLengthLabels();
+  }
+  if (event.target.type === "radio") {
+    updateSegmentedIndicators();
   }
 });
 
@@ -616,6 +659,7 @@ els.answerForm.addEventListener("submit", async (event) => {
     state.session = response.session;
     saveSession(state.session);
     els.answerInput.value = "";
+    updateCharCount(els.answerInput);
     render();
   } catch (error) {
     alert(error.message);
@@ -630,9 +674,14 @@ els.sampleBtn.addEventListener("click", () => {
   els.scenario.value = "保研复试";
   els.style.value = "严格导师型";
   els.major.value = "人工智能专业，大三，做过机器学习和计算机视觉课程项目";
+  els.targetProfile.value =
+    "保研申请智能感知与机器人实验室，导师方向包括计算机视觉、多模态感知和机器人操作，希望重点展示自己具备可靠实验设计、模型理解和工程落地能力。";
   els.project.value =
     "我参与了一个基于深度学习的实验室安全帽佩戴检测项目，目标是在实验室监控画面中识别人员是否正确佩戴安全帽。项目使用公开数据集和我们补充采集的少量实验室图片，先做数据清洗和标注，然后用 YOLO 系列目标检测模型训练。我的主要工作是整理数据、完成训练脚本、调整数据增强参数，并对比不同输入尺寸和置信度阈值下的检测效果。最终在测试集上 mAP 有一定提升，但在光照较暗和遮挡场景下仍然误检较多。我担心老师会追问为什么选择 YOLO、数据量不大是否可靠、以及这个项目的创新点到底是什么。";
   els.focus.value = "重点训练方法选择、实验可靠性、结果不好怎么解释、个人贡献和创新点不足。";
+  updateLengthLabels();
+  updateSegmentedIndicators();
+  updateCharCounts();
 });
 
 async function resetSession() {
@@ -641,6 +690,7 @@ async function resetSession() {
   state.activeInsight = "risk";
   clearSavedSession();
   els.answerInput.value = "";
+  updateCharCount(els.answerInput);
   render();
   if (sessionId) {
     try {
@@ -677,4 +727,6 @@ els.insightGrid.addEventListener("click", (event) => {
 checkHealth();
 restoreSavedSession().then(render);
 updateLengthLabels();
+updateSegmentedIndicators();
+initCharCounters();
 renderIcons();

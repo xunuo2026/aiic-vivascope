@@ -16,6 +16,7 @@ SessionStatus = Literal["interview", "finished"]
 class StartRequest(BaseModel):
     scenario: InterviewScenario
     major: str = Field(min_length=2, max_length=120)
+    target_profile: str = Field(default="", max_length=1200)
     project: str = Field(default="", max_length=6000)
     focus: str = Field(default="", max_length=800)
     style: FollowupStyle

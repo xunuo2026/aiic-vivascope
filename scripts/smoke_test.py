@@ -22,14 +22,20 @@ def main() -> None:
         "scenario": "保研复试",
         "style": "严格导师型",
         "major": "人工智能专业，大三，做过机器学习和计算机视觉课程项目",
+        "target_profile": "保研申请智能感知方向导师，研究内容包括计算机视觉、模型泛化和可靠评估。",
         "project": "",
         "focus": "模型泛化、过拟合、评价指标",
     }
     response = client.post("/api/sessions", json=knowledge_payload)
     response.raise_for_status()
-    opening_question = response.json()["session"]["current_question"]
+    knowledge_session = response.json()["session"]
+    opening_question = knowledge_session["current_question"]
     banned_phrases = ["结合保研复试", "面试场景", "为什么可能被问到", "风险雷达", "知识点清单"]
     assert not any(phrase in opening_question for phrase in banned_phrases), opening_question
+    response = client.post(f"/api/sessions/{knowledge_session['session_id']}/answer", json={"answer": "我不会"})
+    response.raise_for_status()
+    low_score = response.json()["turn"]["feedback"]["score"]
+    assert low_score <= 20, low_score
 
     payload = {
         "mode": "mixed",
@@ -37,6 +43,7 @@ def main() -> None:
         "scenario": "保研复试",
         "style": "严格导师型",
         "major": "人工智能专业，大三，做过机器学习和计算机视觉课程项目",
+        "target_profile": "保研申请智能感知与机器人实验室，导师方向包括视觉检测、多模态感知和机器人操作。",
         "project": (
             "我参与了一个基于深度学习的实验室安全帽佩戴检测项目，目标是在实验室监控画面中识别人员是否正确佩戴安全帽。"
             "项目使用公开数据集和我们补充采集的少量实验室图片，先做数据清洗和标注，然后用 YOLO 系列目标检测模型训练。"
