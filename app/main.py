@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+import asyncio
+import json
 from pathlib import Path
 
 import uvicorn
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from app.asr_client import DashScopeASRClient
 from app.config import get_settings
 from app.engine import InterviewEngine
 from app.llm_client import LLMClient
@@ -46,8 +49,78 @@ async def health() -> dict[str, str | bool]:
         "provider": "dashscope",
         "model_configured": bool(settings.qwen_model),
         "api_key_configured": bool(settings.dashscope_api_key),
+        "asr_model_configured": bool(settings.dashscope_asr_model),
+        "asr_configured": settings.has_asr,
         "mock_allowed": settings.allow_mock,
     }
+
+
+@app.websocket("/api/speech/stream")
+async def speech_stream(websocket: WebSocket) -> None:
+    await websocket.accept()
+    if not settings.has_asr:
+        await websocket.send_json({"type": "error", "message": "语音识别未配置，请检查 DASHSCOPE_API_KEY 和 DASHSCOPE_ASR_MODEL。"})
+        await websocket.close()
+        return
+
+    async def safe_send(payload: dict) -> None:
+        try:
+            await websocket.send_json(payload)
+        except RuntimeError:
+            pass
+
+    try:
+        async with DashScopeASRClient(settings) as asr:
+            await safe_send({"type": "ready"})
+
+            async def receive_audio() -> None:
+                while True:
+                    message = await websocket.receive()
+                    if message.get("type") == "websocket.disconnect":
+                        raise WebSocketDisconnect
+                    audio = message.get("bytes")
+                    if audio:
+                        await asr.append_audio(audio)
+                        continue
+                    text = message.get("text")
+                    if not text:
+                        continue
+                    try:
+                        payload = json.loads(text)
+                    except json.JSONDecodeError:
+                        continue
+                    if payload.get("type") == "stop":
+                        await asr.finish()
+                        return
+
+            async def forward_events() -> None:
+                async for event in asr.events():
+                    await safe_send(event)
+                    if event.get("type") in {"done", "error"}:
+                        return
+
+            receive_task = asyncio.create_task(receive_audio())
+            forward_task = asyncio.create_task(forward_events())
+            done, pending = await asyncio.wait({receive_task, forward_task}, return_when=asyncio.FIRST_COMPLETED)
+
+            if receive_task in done and not forward_task.done():
+                try:
+                    await asyncio.wait_for(forward_task, timeout=15)
+                except TimeoutError:
+                    await safe_send({"type": "done"})
+
+            for task in pending:
+                task.cancel()
+            await asyncio.gather(*pending, return_exceptions=True)
+    except WebSocketDisconnect:
+        return
+    except Exception as exc:
+        await safe_send({"type": "error", "message": f"语音识别连接失败：{exc}"})
+    finally:
+        try:
+            await websocket.close()
+        except RuntimeError:
+            pass
 
 
 @app.post("/api/sessions", response_model=StartResponse)

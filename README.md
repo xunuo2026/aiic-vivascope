@@ -18,6 +18,7 @@
 - 后端：FastAPI + Pydantic
 - 前端：原生 HTML/CSS/JavaScript
 - 模型：阿里云百炼 / DashScope 千问模型，使用 OpenAI-compatible Chat Completions endpoint
+- 语音输入：浏览器麦克风采集 + 后端 WebSocket 转发 + DashScope Qwen-ASR Realtime
 - 简历导入：PDF 文本提取 + 千问结构化建议 + 本地启发式兜底
 - 会话：后端内存状态 + 前端 localStorage 快照恢复
 - 数据库：无
@@ -37,12 +38,16 @@ cp .env.example .env
 DASHSCOPE_API_KEY=your_dashscope_api_key_here
 QWEN_MODEL=qwen3.6-max-preview
 DASHSCOPE_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+DASHSCOPE_ASR_MODEL=qwen3-asr-flash-realtime
+DASHSCOPE_ASR_WS_URL=wss://dashscope.aliyuncs.com/api-ws/v1/realtime
 APP_HOST=0.0.0.0
 APP_PORT=8000
 VIVASCOPE_ALLOW_MOCK=true
 ```
 
 `QWEN_MODEL` 必须从 `.env` 读取，方便按百炼账号可用模型切换。样例使用 `qwen3.6-max-preview`，实际部署时以你的百炼控制台可调用模型为准。
+
+语音输入复用 `DASHSCOPE_API_KEY`，并通过 `DASHSCOPE_ASR_MODEL` 配置实时语音识别模型。浏览器麦克风在公网环境通常要求 HTTPS；本地 `127.0.0.1`/`localhost` 可直接测试。
 
 如果没有配置 `DASHSCOPE_API_KEY` 或 `QWEN_MODEL`，应用会进入本地演示模式，方便录制 UI 和验证流程；正式演示建议配置真实千问模型。
 
@@ -122,6 +127,7 @@ sudo ufw allow 8000/tcp
 - `POST /api/sessions`：创建训练会话并生成初始分析
 - `GET /api/sessions/{session_id}`：读取会话
 - `POST /api/sessions/{session_id}/answer`：提交一轮回答，获得即时反馈和下一题
+- `WS /api/speech/stream`：回答框语音输入的实时转文字通道
 - `POST /api/sessions/restore`：从前端快照恢复会话
 - `DELETE /api/sessions/{session_id}`：删除会话
 

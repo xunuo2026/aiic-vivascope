@@ -43,6 +43,13 @@ startxref
 def main() -> None:
     logging.getLogger("pypdf").setLevel(logging.ERROR)
     client = TestClient(app)
+    health = client.get("/health")
+    health.raise_for_status()
+    assert "asr_configured" in health.json(), health.json()
+    with client.websocket_connect("/api/speech/stream") as websocket:
+        speech_error = websocket.receive_json()
+        assert speech_error["type"] == "error", speech_error
+
     response = client.post(
         "/api/resume/parse",
         files={"file": ("resume.pdf", fake_resume_pdf(), "application/pdf")},

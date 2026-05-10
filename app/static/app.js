@@ -44,6 +44,11 @@ const els = {
   answerForm: document.querySelector("#answerForm"),
   answerInput: document.querySelector("#answerInput"),
   answerBtn: document.querySelector("#answerBtn"),
+  voicePanel: document.querySelector("#voicePanel"),
+  voiceBtn: document.querySelector("#voiceBtn"),
+  voiceStatus: document.querySelector("#voiceStatus"),
+  voicePartial: document.querySelector("#voicePartial"),
+  voiceTimer: document.querySelector("#voiceTimer"),
   questionPanel: document.querySelector("#questionPanel"),
   historyPanel: document.querySelector("#historyPanel"),
   reportPanel: document.querySelector("#reportPanel"),
@@ -55,6 +60,19 @@ const state = {
   activeInsight: "risk",
   resumeDraft: null,
   workbenchOpen: false,
+  voice: {
+    active: false,
+    socket: null,
+    stream: null,
+    audioContext: null,
+    source: null,
+    processor: null,
+    finalText: "",
+    partialText: "",
+    startedAt: 0,
+    timerId: null,
+    limitId: null,
+  },
 };
 
 const modeLabels = {
@@ -82,6 +100,10 @@ const phaseLabels = {
 
 const startBtnDefaultText = "生成训练";
 const answerBtnDefaultText = "提交回答";
+const tooltip = document.createElement("div");
+tooltip.className = "floating-tooltip";
+document.body.appendChild(tooltip);
+let tooltipTarget = null;
 
 function escapeHtml(value = "") {
   return String(value)
@@ -94,6 +116,33 @@ function escapeHtml(value = "") {
 
 function listHtml(items = []) {
   return items.length ? items.map((item) => `<li>${escapeHtml(item)}</li>`).join("") : "<li>暂无</li>";
+}
+
+function positionTooltip(target) {
+  if (!target || !tooltip.classList.contains("visible")) return;
+  const rect = target.getBoundingClientRect();
+  const tooltipRect = tooltip.getBoundingClientRect();
+  const spacing = 10;
+  let left = rect.left + rect.width / 2 - tooltipRect.width / 2;
+  left = Math.max(12, Math.min(left, window.innerWidth - tooltipRect.width - 12));
+  let top = rect.top - tooltipRect.height - spacing;
+  if (top < 8) top = rect.bottom + spacing;
+  tooltip.style.left = `${left}px`;
+  tooltip.style.top = `${top}px`;
+}
+
+function showTooltip(target) {
+  const text = target?.dataset?.tip;
+  if (!text) return;
+  tooltipTarget = target;
+  tooltip.textContent = text;
+  tooltip.classList.add("visible");
+  positionTooltip(target);
+}
+
+function hideTooltip() {
+  tooltipTarget = null;
+  tooltip.classList.remove("visible");
 }
 
 function setBusy(isBusy, label = "处理中", hint = "") {
@@ -116,7 +165,7 @@ function setBusy(isBusy, label = "处理中", hint = "") {
 function setControlsDisabled(disabled) {
   [
     ...els.setupForm.querySelectorAll("input, select, textarea, button"),
-    ...els.answerForm.querySelectorAll("textarea, button"),
+    ...els.answerForm.querySelectorAll("textarea, button:not(#voiceBtn)"),
     els.sampleBtn,
     els.clearInputsBtn,
     els.resetBtn,
@@ -125,6 +174,7 @@ function setControlsDisabled(disabled) {
   ].forEach((control) => {
     if (control) control.disabled = disabled;
   });
+  if (els.voiceBtn) els.voiceBtn.disabled = disabled && !state.voice.active;
 }
 
 async function api(path, options = {}) {
@@ -188,6 +238,226 @@ function showLanding() {
 function renderResumeStatus(kind = "idle", html = "没有简历也没关系，可以继续手动填写。") {
   els.resumeStatus.className = `resume-status ${kind}`;
   els.resumeStatus.innerHTML = html;
+}
+
+function setVoiceStatus(status, message, partial = "") {
+  els.voicePanel.className = `voice-panel ${status}`;
+  els.voiceStatus.textContent = message;
+  els.voicePartial.textContent = partial || "支持中文口述回答。录音只用于实时转文字，不会保存音频。";
+}
+
+function formatSeconds(seconds) {
+  const safe = Math.max(0, Math.floor(seconds));
+  return `${String(Math.floor(safe / 60)).padStart(2, "0")}:${String(safe % 60).padStart(2, "0")}`;
+}
+
+function getSpeechSocketUrl() {
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  return `${protocol}//${window.location.host}/api/speech/stream`;
+}
+
+function downsampleTo16k(float32Array, inputSampleRate) {
+  const outputSampleRate = 16000;
+  if (inputSampleRate === outputSampleRate) return float32Array;
+  const sampleRateRatio = inputSampleRate / outputSampleRate;
+  const newLength = Math.round(float32Array.length / sampleRateRatio);
+  const result = new Float32Array(newLength);
+  let offsetResult = 0;
+  let offsetBuffer = 0;
+  while (offsetResult < result.length) {
+    const nextOffsetBuffer = Math.round((offsetResult + 1) * sampleRateRatio);
+    let accum = 0;
+    let count = 0;
+    for (let i = offsetBuffer; i < nextOffsetBuffer && i < float32Array.length; i += 1) {
+      accum += float32Array[i];
+      count += 1;
+    }
+    result[offsetResult] = count ? accum / count : 0;
+    offsetResult += 1;
+    offsetBuffer = nextOffsetBuffer;
+  }
+  return result;
+}
+
+function floatToPcm16(float32Array) {
+  const buffer = new ArrayBuffer(float32Array.length * 2);
+  const view = new DataView(buffer);
+  for (let i = 0; i < float32Array.length; i += 1) {
+    const sample = Math.max(-1, Math.min(1, float32Array[i]));
+    view.setInt16(i * 2, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
+  }
+  return buffer;
+}
+
+function appendVoiceText(text) {
+  const normalized = text.trim();
+  if (!normalized) return;
+  const prefix = els.answerInput.value.trim() ? "\n" : "";
+  els.answerInput.value = `${els.answerInput.value}${prefix}${normalized}`;
+  updateCharCount(els.answerInput);
+}
+
+async function startVoiceInput() {
+  if (state.busy || state.voice.active) return;
+  if (!window.isSecureContext && window.location.hostname !== "127.0.0.1" && window.location.hostname !== "localhost") {
+    setVoiceStatus("error", "浏览器拒绝麦克风", "请使用 HTTPS，或在本地 localhost/127.0.0.1 测试语音输入。");
+    return;
+  }
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!navigator.mediaDevices?.getUserMedia || !AudioContextClass) {
+    setVoiceStatus("error", "当前浏览器不支持", "请使用新版 Chrome 或 Edge 测试语音输入。");
+    return;
+  }
+
+  state.voice.finalText = "";
+  state.voice.partialText = "";
+  state.voice.startedAt = Date.now();
+  state.voice.active = true;
+  els.voiceTimer.textContent = "00:00";
+  els.voiceBtn.classList.add("recording");
+  els.voiceBtn.querySelector("span").textContent = "取消录音";
+  els.voiceBtn.querySelector("i")?.setAttribute("data-lucide", "square");
+  renderIcons();
+  setVoiceStatus("connecting", "正在连接语音识别", "请允许浏览器访问麦克风。");
+
+  try {
+    state.voice.stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        channelCount: 1,
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+    });
+    state.voice.socket = new WebSocket(getSpeechSocketUrl());
+    state.voice.socket.binaryType = "arraybuffer";
+
+    state.voice.socket.addEventListener("message", (event) => {
+      let payload = {};
+      try {
+        payload = JSON.parse(event.data);
+      } catch {
+        return;
+      }
+      if (payload.type === "ready") {
+        setVoiceStatus("recording", "录音中", "你可以开始回答，系统会边听边转写。");
+        return;
+      }
+      if (payload.type === "partial") {
+        state.voice.partialText = payload.text || "";
+        setVoiceStatus("recording", "录音中", state.voice.partialText || "正在识别你的回答...");
+        return;
+      }
+      if (payload.type === "final") {
+        state.voice.finalText = payload.text || state.voice.finalText;
+        setVoiceStatus("recognizing", "已识别", state.voice.finalText);
+        return;
+      }
+      if (payload.type === "done") {
+        appendVoiceText(state.voice.finalText || state.voice.partialText);
+        cleanupVoiceInput("idle", "转写已写入回答框");
+        return;
+      }
+      if (payload.type === "error") {
+        cleanupVoiceInput("error", "语音识别失败", payload.message || "请稍后重试，或改用手动输入。");
+      }
+    });
+
+    state.voice.socket.addEventListener("open", () => {
+      startAudioPipeline();
+    });
+
+    state.voice.socket.addEventListener("close", () => {
+      if (state.voice.active) {
+        appendVoiceText(state.voice.finalText || state.voice.partialText);
+        cleanupVoiceInput("idle", "语音连接已结束");
+      }
+    });
+
+    state.voice.socket.addEventListener("error", () => {
+      cleanupVoiceInput("error", "语音连接失败", "请检查 ASR 配置和网络，或改用手动输入。");
+    });
+  } catch (error) {
+    cleanupVoiceInput("error", "无法开始录音", error?.message || "请检查麦克风权限。");
+  }
+}
+
+function startAudioPipeline() {
+  if (!state.voice.stream || !state.voice.socket) return;
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  state.voice.audioContext = new AudioContextClass();
+  state.voice.source = state.voice.audioContext.createMediaStreamSource(state.voice.stream);
+  state.voice.processor = state.voice.audioContext.createScriptProcessor(4096, 1, 1);
+  state.voice.processor.onaudioprocess = (event) => {
+    if (!state.voice.active || state.voice.socket?.readyState !== WebSocket.OPEN) return;
+    const input = event.inputBuffer.getChannelData(0);
+    const resampled = downsampleTo16k(input, state.voice.audioContext.sampleRate);
+    state.voice.socket.send(floatToPcm16(resampled));
+  };
+  state.voice.source.connect(state.voice.processor);
+  state.voice.processor.connect(state.voice.audioContext.destination);
+  state.voice.active = true;
+  els.voiceBtn.classList.add("recording");
+  els.voiceBtn.querySelector("span").textContent = "结束录音";
+  els.voiceBtn.querySelector("i")?.setAttribute("data-lucide", "square");
+  renderIcons();
+  state.voice.timerId = window.setInterval(() => {
+    els.voiceTimer.textContent = formatSeconds((Date.now() - state.voice.startedAt) / 1000);
+  }, 250);
+  state.voice.limitId = window.setTimeout(() => {
+    stopVoiceInput();
+  }, 55000);
+}
+
+async function stopVoiceInput() {
+  if (!state.voice.active && state.voice.socket?.readyState !== WebSocket.OPEN) {
+    cleanupVoiceInput("idle", "语音输入已结束");
+    return;
+  }
+  setVoiceStatus("recognizing", "正在整理转写", state.voice.partialText || "请稍等，正在结束本次语音识别。");
+  state.voice.active = false;
+  stopLocalAudio();
+  if (state.voice.socket?.readyState === WebSocket.OPEN) {
+    state.voice.socket.send(JSON.stringify({ type: "stop" }));
+  } else {
+    cleanupVoiceInput("idle", "语音输入已结束");
+  }
+}
+
+function stopLocalAudio() {
+  if (state.voice.timerId) window.clearInterval(state.voice.timerId);
+  if (state.voice.limitId) window.clearTimeout(state.voice.limitId);
+  state.voice.timerId = null;
+  state.voice.limitId = null;
+  if (state.voice.processor) {
+    state.voice.processor.disconnect();
+    state.voice.processor.onaudioprocess = null;
+  }
+  if (state.voice.source) state.voice.source.disconnect();
+  if (state.voice.audioContext) state.voice.audioContext.close();
+  if (state.voice.stream) state.voice.stream.getTracks().forEach((track) => track.stop());
+  state.voice.processor = null;
+  state.voice.source = null;
+  state.voice.audioContext = null;
+  state.voice.stream = null;
+}
+
+function cleanupVoiceInput(status = "idle", message = "未开始录音", detail = "") {
+  stopLocalAudio();
+  if (
+    state.voice.socket
+    && [WebSocket.OPEN, WebSocket.CONNECTING].includes(state.voice.socket.readyState)
+  ) {
+    state.voice.socket.close();
+  }
+  state.voice.socket = null;
+  state.voice.active = false;
+  els.voiceBtn.classList.remove("recording");
+  els.voiceBtn.querySelector("span").textContent = "语音输入";
+  els.voiceBtn.querySelector("i")?.setAttribute("data-lucide", "mic");
+  els.voiceTimer.textContent = "00:00";
+  setVoiceStatus(status, message, detail);
+  renderIcons();
 }
 
 function getSelectedMode() {
@@ -741,6 +1011,10 @@ els.setupForm.addEventListener("change", (event) => {
 els.answerForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (state.busy || !state.session) return;
+  if (state.voice.active) {
+    alert("请先结束录音，再提交回答。");
+    return;
+  }
   const answer = els.answerInput.value.trim();
   if (!answer) {
     alert("请先输入本轮回答。");
@@ -799,7 +1073,17 @@ els.landingSampleBtn.addEventListener("click", () => {
 });
 
 els.homeBtn.addEventListener("click", () => {
+  if (state.voice.active) stopVoiceInput();
   showLanding();
+});
+
+els.voiceBtn.addEventListener("click", () => {
+  if (state.busy) return;
+  if (state.voice.active) {
+    stopVoiceInput();
+  } else {
+    startVoiceInput();
+  }
 });
 
 els.clearInputsBtn.addEventListener("click", () => {
@@ -890,6 +1174,7 @@ function renderResumeDraft(response) {
 
 async function resetSession() {
   if (state.busy) return;
+  if (state.voice.active) stopVoiceInput();
   const sessionId = state.session?.session_id;
   state.session = null;
   state.activeInsight = "risk";
@@ -929,6 +1214,29 @@ els.insightGrid.addEventListener("click", (event) => {
   renderInsights(state.session);
   renderIcons();
 });
+
+document.addEventListener("mouseover", (event) => {
+  const target = event.target.closest("[data-tip]");
+  if (target) showTooltip(target);
+});
+
+document.addEventListener("focusin", (event) => {
+  const target = event.target.closest("[data-tip]");
+  if (target) showTooltip(target);
+});
+
+document.addEventListener("mousemove", () => {
+  positionTooltip(tooltipTarget);
+});
+
+document.addEventListener("mouseout", (event) => {
+  if (tooltipTarget && !event.relatedTarget?.closest?.("[data-tip]")) hideTooltip();
+});
+
+document.addEventListener("focusout", hideTooltip);
+
+window.addEventListener("scroll", () => positionTooltip(tooltipTarget), { passive: true });
+window.addEventListener("resize", () => positionTooltip(tooltipTarget));
 
 checkHealth();
 restoreSavedSession().then(render);

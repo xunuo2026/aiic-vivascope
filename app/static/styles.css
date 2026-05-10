@@ -926,75 +926,36 @@ button svg {
 
 [data-tip]::before,
 [data-tip]::after {
-  position: absolute;
-  left: 50%;
-  z-index: 80;
-  opacity: 0;
-  pointer-events: none;
-  transition:
-    opacity 160ms ease,
-    transform 160ms ease;
+  display: none;
 }
 
-[data-tip]::before {
-  bottom: calc(100% + 10px);
+.floating-tooltip {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 9999;
   width: max-content;
-  max-width: 260px;
+  max-width: min(280px, calc(100vw - 24px));
   padding: 8px 10px;
   color: #fffdf7;
-  background: rgba(12, 48, 44, 0.96);
+  background: rgba(12, 48, 44, 0.97);
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 8px;
-  box-shadow: 0 14px 30px rgba(12, 48, 44, 0.18);
-  content: attr(data-tip);
+  box-shadow: 0 18px 42px rgba(12, 48, 44, 0.2);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 750;
   line-height: 1.45;
-  text-align: left;
-  transform: translate(-50%, 6px);
-  white-space: normal;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(6px);
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease;
 }
 
-[data-tip]::after {
-  bottom: calc(100% + 4px);
-  width: 10px;
-  height: 10px;
-  background: rgba(12, 48, 44, 0.96);
-  content: "";
-  transform: translate(-50%, 6px) rotate(45deg);
-}
-
-[data-tip]:hover::before,
-[data-tip]:hover::after,
-[data-tip]:focus-within::before,
-[data-tip]:focus-within::after {
+.floating-tooltip.visible {
   opacity: 1;
-  transform: translate(-50%, 0);
-}
-
-.landing-nav [data-tip]::before,
-.topbar-side [data-tip]::before {
-  top: calc(100% + 10px);
-  bottom: auto;
-  transform: translate(-50%, -6px);
-}
-
-.landing-nav [data-tip]::after,
-.topbar-side [data-tip]::after {
-  top: calc(100% + 4px);
-  bottom: auto;
-  transform: translate(-50%, -6px) rotate(45deg);
-}
-
-.landing-nav [data-tip]:hover::before,
-.landing-nav [data-tip]:hover::after,
-.landing-nav [data-tip]:focus-within::before,
-.landing-nav [data-tip]:focus-within::after,
-.topbar-side [data-tip]:hover::before,
-.topbar-side [data-tip]:hover::after,
-.topbar-side [data-tip]:focus-within::before,
-.topbar-side [data-tip]:focus-within::after {
-  transform: translate(-50%, 0);
+  transform: translateY(0);
 }
 
 .empty-state {
@@ -1222,6 +1183,71 @@ button svg {
 
 .answer-form textarea {
   background: var(--surface);
+}
+
+.voice-panel {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.voice-panel.recording {
+  border-color: #d09a45;
+  background: #fff8ea;
+}
+
+.voice-panel.recognizing {
+  border-color: #bcd2cc;
+  background: #f6faf8;
+}
+
+.voice-panel.error {
+  border-color: #e0a09a;
+  background: #fff5f3;
+}
+
+.voice-btn.recording {
+  color: #fff;
+  background: var(--amber);
+  border-color: var(--amber);
+}
+
+.voice-copy {
+  min-width: 0;
+}
+
+.voice-copy strong,
+.voice-copy p {
+  display: block;
+}
+
+.voice-copy strong {
+  color: var(--teal-dark);
+  font-size: 14px;
+}
+
+.voice-copy p {
+  margin: 4px 0 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.voice-timer {
+  min-width: 48px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 850;
+  text-align: right;
 }
 
 .history-panel {
@@ -1819,6 +1845,14 @@ button svg {
   .stage-layout .question-panel {
     min-height: auto;
     padding: 18px;
+  }
+
+  .voice-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .voice-timer {
+    text-align: left;
   }
 
   .turn-detail summary {
