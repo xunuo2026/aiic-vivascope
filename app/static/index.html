@@ -32,6 +32,8 @@
             </button>
           </div>
 
+          <div id="setupSummary" class="setup-summary hidden"></div>
+
           <form id="setupForm" class="setup-form">
             <fieldset>
               <legend>训练模式</legend>
@@ -133,24 +135,29 @@
 
             <div id="warningBox" class="warning-box hidden"></div>
 
-            <div id="insightGrid" class="insight-grid"></div>
-
-            <section id="questionPanel" class="question-panel">
-              <div class="question-head">
-                <p class="eyebrow">当前追问</p>
-                <span id="styleLabel"></span>
-              </div>
-              <p id="currentQuestion" class="question-text"></p>
-              <form id="answerForm" class="answer-form">
-                <textarea id="answerInput" rows="6" maxlength="5000" placeholder="像真实口试一样作答：先给结论，再补依据、数据和局限。"></textarea>
-                <div class="form-actions">
-                  <button id="answerBtn" class="primary-btn" type="submit">
-                    <i data-lucide="send"></i>
-                    <span>提交回答</span>
-                  </button>
+            <div class="stage-layout">
+              <section id="questionPanel" class="question-panel">
+                <div class="question-head">
+                  <div>
+                    <p class="eyebrow">面试官追问</p>
+                    <span id="styleLabel"></span>
+                  </div>
+                  <span class="live-badge">一问一答</span>
                 </div>
-              </form>
-            </section>
+                <p id="currentQuestion" class="question-text"></p>
+                <form id="answerForm" class="answer-form">
+                  <textarea id="answerInput" rows="7" maxlength="5000" placeholder="像真实口试一样作答：先给结论，再补依据、数据和局限。"></textarea>
+                  <div class="form-actions">
+                    <button id="answerBtn" class="primary-btn" type="submit">
+                      <i data-lucide="send"></i>
+                      <span>提交回答</span>
+                    </button>
+                  </div>
+                </form>
+              </section>
+
+              <aside id="insightGrid" class="insight-grid" aria-label="训练分析"></aside>
+            </div>
 
             <section id="historyPanel" class="history-panel"></section>
             <section id="reportPanel" class="report-panel hidden"></section>
@@ -163,4 +170,3 @@
     <script src="/static/app.js"></script>
   </body>
 </html>
-

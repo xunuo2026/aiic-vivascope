@@ -13,6 +13,20 @@ from app.main import app
 
 def main() -> None:
     client = TestClient(app)
+    knowledge_payload = {
+        "mode": "knowledge",
+        "scenario": "保研复试",
+        "style": "严格导师型",
+        "major": "人工智能专业，大三，做过机器学习和计算机视觉课程项目",
+        "project": "",
+        "focus": "模型泛化、过拟合、评价指标",
+    }
+    response = client.post("/api/sessions", json=knowledge_payload)
+    response.raise_for_status()
+    opening_question = response.json()["session"]["current_question"]
+    banned_phrases = ["结合保研复试", "面试场景", "为什么可能被问到", "风险雷达", "知识点清单"]
+    assert not any(phrase in opening_question for phrase in banned_phrases), opening_question
+
     payload = {
         "mode": "mixed",
         "scenario": "保研复试",

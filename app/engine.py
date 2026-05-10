@@ -122,6 +122,8 @@ class InterviewEngine:
                 "content": (
                     "你是“问脉 VivaScope”的 AI 口试训练引擎，服务理工科本科生。"
                     "你的核心任务不是闲聊，而是先结构化分析项目经历，再围绕项目脉络和漏洞连续追问。"
+                    "生成的 opening_question 必须像真实面试官当场提问，不要暴露产品流程、训练模式或系统分析依据。"
+                    "问题中禁止出现“请结合某某面试场景”“根据风险雷达”“知识点清单”“项目脉络图”等系统化措辞。"
                     "请只返回严格 JSON，不要 Markdown，不要解释 JSON 外的内容。"
                 ),
             },
@@ -138,7 +140,9 @@ class InterviewEngine:
                     f"{project_rule}\n{knowledge_rule}\n"
                     "项目追问风险维度必须覆盖：项目动机、方法选择、实验/实现可靠性、个人贡献、结果解释、创新性与不足。"
                     "风险 level 为 1-5，5 代表最容易被问穿。"
-                    "opening_question 必须是第一轮面试问题，不能是寒暄，必须能开启连续追问。\n\n"
+                    "opening_question 必须是第一轮面试问题，不能是寒暄，必须能开启连续追问。"
+                    "场景只影响你判断追问严厉程度和考察重点，不要把场景名机械写进问题。"
+                    "基础知识问题也必须自然，像老师直接问“你怎么判断模型没有过拟合？”，不要说“为什么可能被问到”。\n\n"
                     "返回 JSON 格式：\n"
                     "{"
                     '"project_map":{"theme":"","motivation":"","methods":[],"evidence":[],"results":[],"contribution":[]} 或 null,'
@@ -157,6 +161,8 @@ class InterviewEngine:
                 "content": (
                     "你是问脉 VivaScope 的连续追问面试官。"
                     "每轮必须基于项目脉络、风险雷达、知识点清单和上一轮回答继续追问，不能随机出通用题。"
+                    "你可以使用这些分析依据，但不能在问题里说出“风险雷达”“知识点清单”“训练模式”“本系统”等产品词。"
+                    "问题必须像真实老师/导师当面追问，直接、自然、可回答。"
                     "每轮反馈要短，但要具体指出漏洞和更稳妥的回答框架。"
                     "请只返回严格 JSON。"
                 ),
@@ -171,6 +177,7 @@ class InterviewEngine:
                     "请给出本轮即时反馈，并生成下一轮追问。"
                     "下一轮问题必须承接用户回答中的具体表述，同时落到一个尚未充分覆盖的风险维度或项目相关知识点。"
                     "若模式是 mixed，项目追问为主，最多穿插一个基础知识点。"
+                    "知识点必须从项目细节自然切入，例如“你刚才说 mAP 提升，你怎么判断不是过拟合造成的？”"
                     "若追问风格是压力追问型，问题可以更尖锐，但不要羞辱用户。\n\n"
                     "返回 JSON 格式："
                     "{"
@@ -302,7 +309,7 @@ class InterviewEngine:
             opening = "请先概括你的项目目标、核心方法和个人贡献，并顺带说明其中一个最关键的基础概念。"
         else:
             first = knowledge_points[0].name if knowledge_points else "你最担心的核心概念"
-            opening = f"请结合{request.scenario}场景，解释“{first}”的基本原理、适用条件，以及它为什么可能被问到。"
+            opening = f"你先解释一下“{first}”的基本原理和适用条件。如果它不成立，通常会带来什么问题？"
         return {
             "project_map": project_map,
             "risk_radar": risk_radar,
@@ -397,8 +404,8 @@ class InterviewEngine:
             point = points[(round_number - 1) % len(points)]
             templates = [
                 f"刚才你提到的解释还可以更落到条件上。请说明“{point.name}”成立需要哪些前提？如果前提不满足，会出现什么误判？",
-                f"请用一个{session.input.scenario}里可能出现的小例子，说明“{point.name}”如何影响方案选择或结果解释。",
-                f"如果面试官要求你把“{point.name}”讲给跨专业老师听，你会如何用 3 句话讲清楚？",
+                f"你能用一个具体例子说明“{point.name}”会怎样影响方法选择或结果解释吗？",
+                f"如果让你把“{point.name}”讲给不做这个方向的老师听，你会如何用 3 句话讲清楚？",
             ]
             return templates[(round_number - 1) % len(templates)]
 
@@ -414,7 +421,7 @@ class InterviewEngine:
         question = project_templates.get(risk.dimension, project_templates["方法选择"])
         if mode == "mixed" and round_number in {3, 5} and session.knowledge_points:
             point = session.knowledge_points[(round_number - 1) % len(session.knowledge_points)]
-            question += f" 同时请解释这里涉及的“{point.name}”，说明它和你的项目判断有什么关系。"
+            question += f" 你刚才的判断还牵涉到“{point.name}”，这个概念在你的项目里具体影响哪一步？"
         return question
 
     def _fallback_final_report(self, session: SessionState) -> FinalReport:
@@ -511,4 +518,3 @@ class InterviewEngine:
         sentences = [s.strip() for s in re.split(r"[。！？\n]", text) if s.strip()]
         picked = [s[:120] for s in sentences if any(keyword in s for keyword in keywords)]
         return picked[:3]
-

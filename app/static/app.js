@@ -6,6 +6,7 @@ const els = {
   setupForm: document.querySelector("#setupForm"),
   sampleBtn: document.querySelector("#sampleBtn"),
   resetBtn: document.querySelector("#resetBtn"),
+  setupSummary: document.querySelector("#setupSummary"),
   startBtn: document.querySelector("#startBtn"),
   scenario: document.querySelector("#scenario"),
   style: document.querySelector("#style"),
@@ -31,6 +32,7 @@ const els = {
 const state = {
   session: null,
   busy: false,
+  activeInsight: "risk",
 };
 
 const modeLabels = {
@@ -127,15 +129,20 @@ function renderIcons() {
 
 function render() {
   const session = state.session;
+  document.body.classList.toggle("has-session", Boolean(session));
+  document.body.classList.remove("editing-setup");
   if (!session) {
     els.emptyState.classList.remove("hidden");
     els.sessionView.classList.add("hidden");
+    els.setupSummary.classList.add("hidden");
+    els.setupForm.classList.remove("hidden");
     renderIcons();
     return;
   }
 
   els.emptyState.classList.add("hidden");
   els.sessionView.classList.remove("hidden");
+  renderSetupSummary(session);
   els.modeLabel.textContent = modeLabels[session.input.mode] || "训练";
   els.styleLabel.textContent = `${session.input.scenario} · ${session.input.style}`;
   const nextRound = Math.min(session.turns.length + 1, session.max_rounds);
@@ -156,29 +163,91 @@ function render() {
   renderIcons();
 }
 
+function renderSetupSummary(session) {
+  const input = session.input;
+  const topRisk = [...(session.risk_radar || [])].sort((a, b) => b.level - a.level)[0];
+  const projectTitle = session.project_map?.theme || input.project || "基础知识问诊";
+  const shortProjectTitle = projectTitle.length > 150 ? `${projectTitle.slice(0, 150)}...` : projectTitle;
+  els.setupSummary.classList.remove("hidden");
+  els.setupForm.classList.add("hidden");
+  els.setupSummary.innerHTML = `
+    <div class="summary-card">
+      <p class="eyebrow">本轮设置</p>
+      <h3>${escapeHtml(modeLabels[input.mode] || "训练")}</h3>
+      <div class="summary-tags">
+        <span>${escapeHtml(input.scenario)}</span>
+        <span>${escapeHtml(input.style)}</span>
+      </div>
+      <dl>
+        <div>
+          <dt>专业背景</dt>
+          <dd>${escapeHtml(input.major)}</dd>
+        </div>
+        <div>
+          <dt>${input.mode === "knowledge" ? "训练重点" : "项目摘要"}</dt>
+          <dd>${escapeHtml(shortProjectTitle)}</dd>
+        </div>
+        ${
+          topRisk
+            ? `<div><dt>最高风险</dt><dd>${escapeHtml(topRisk.dimension)} · ${topRisk.level}/5</dd></div>`
+            : ""
+        }
+      </dl>
+      <div class="summary-actions">
+        <button id="summaryEditBtn" class="secondary-btn" type="button">
+          <i data-lucide="sliders-horizontal"></i>
+          <span>展开设置</span>
+        </button>
+        <button id="summaryResetBtn" class="ghost-btn" type="button">
+          <i data-lucide="rotate-ccw"></i>
+          <span>重新开始</span>
+        </button>
+      </div>
+    </div>
+  `;
+}
+
 function renderInsights(session) {
-  const sections = [];
-
-  if (session.project_map) {
-    const map = session.project_map;
-    sections.push(`
-      <article class="insight-section">
-        <h3>项目脉络图</h3>
-        <ul class="map-list">
-          <li><strong>项目主题</strong>${escapeHtml(map.theme)}</li>
-          <li><strong>项目动机</strong>${escapeHtml(map.motivation)}</li>
-          <li><strong>主要方法</strong>${escapeHtml((map.methods || []).join("；") || "待补充")}</li>
-          <li><strong>实验/实现依据</strong>${escapeHtml((map.evidence || []).join("；") || "待补充")}</li>
-          <li><strong>结果与贡献</strong>${escapeHtml([...(map.results || []), ...(map.contribution || [])].join("；") || "待补充")}</li>
-        </ul>
-      </article>
-    `);
+  const tabs = getInsightTabs(session);
+  if (!tabs.length) {
+    els.insightGrid.innerHTML = "";
+    return;
   }
+  if (!tabs.some((tab) => tab.id === state.activeInsight)) {
+    state.activeInsight = tabs[0].id;
+  }
+  const active = tabs.find((tab) => tab.id === state.activeInsight) || tabs[0];
+  const summary = buildInsightSummary(session);
 
+  els.insightGrid.innerHTML = `
+    <div class="insight-summary">
+      <p class="eyebrow">追问依据</p>
+      <h3>${escapeHtml(summary.title)}</h3>
+      <p>${escapeHtml(summary.text)}</p>
+    </div>
+    <div class="insight-tabs" role="tablist">
+      ${tabs
+        .map(
+          (tab) => `
+            <button class="${tab.id === active.id ? "active" : ""}" type="button" data-insight-tab="${tab.id}">
+              ${escapeHtml(tab.label)}
+            </button>
+          `,
+        )
+        .join("")}
+    </div>
+    <article class="insight-section">${active.render()}</article>
+  `;
+}
+
+function getInsightTabs(session) {
+  const tabs = [];
   if (session.risk_radar?.length) {
-    sections.push(`
-      <article class="insight-section">
-        <h3>追问风险雷达</h3>
+    tabs.push({
+      id: "risk",
+      label: "风险",
+      render: () => `
+        <h3>追问风险摘要</h3>
         <div class="risk-list">
           ${session.risk_radar
             .map((risk) => {
@@ -197,13 +266,33 @@ function renderInsights(session) {
             })
             .join("")}
         </div>
-      </article>
-    `);
+      `,
+    });
+  }
+
+  if (session.project_map) {
+    const map = session.project_map;
+    tabs.push({
+      id: "map",
+      label: "脉络",
+      render: () => `
+        <h3>项目脉络图</h3>
+        <ul class="map-list">
+          <li><strong>项目主题</strong>${escapeHtml(map.theme)}</li>
+          <li><strong>项目动机</strong>${escapeHtml(map.motivation)}</li>
+          <li><strong>主要方法</strong>${escapeHtml((map.methods || []).join("；") || "待补充")}</li>
+          <li><strong>实验/实现依据</strong>${escapeHtml((map.evidence || []).join("；") || "待补充")}</li>
+          <li><strong>结果与贡献</strong>${escapeHtml([...(map.results || []), ...(map.contribution || [])].join("；") || "待补充")}</li>
+        </ul>
+      `,
+    });
   }
 
   if (session.knowledge_points?.length) {
-    sections.push(`
-      <article class="insight-section">
+    tabs.push({
+      id: "knowledge",
+      label: "知识",
+      render: () => `
         <h3>知识点清单</h3>
         <ul class="knowledge-list">
           ${session.knowledge_points
@@ -219,11 +308,31 @@ function renderInsights(session) {
             )
             .join("")}
         </ul>
-      </article>
-    `);
+      `,
+    });
   }
+  return tabs;
+}
 
-  els.insightGrid.innerHTML = sections.join("");
+function buildInsightSummary(session) {
+  const topRisk = [...(session.risk_radar || [])].sort((a, b) => b.level - a.level)[0];
+  if (topRisk) {
+    return {
+      title: `${topRisk.dimension} · ${topRisk.level}/5`,
+      text: topRisk.reason,
+    };
+  }
+  const point = session.knowledge_points?.[0];
+  if (point) {
+    return {
+      title: point.name,
+      text: point.why_relevant,
+    };
+  }
+  return {
+    title: "等待训练分析",
+    text: "生成训练后，这里会显示本轮追问的主要依据。",
+  };
 }
 
 function renderQuestion(session) {
@@ -240,31 +349,42 @@ function renderHistory(session) {
     els.historyPanel.innerHTML = "";
     return;
   }
+  const latest = session.turns[session.turns.length - 1];
+  const previous = session.turns.slice(0, -1).reverse();
   els.historyPanel.innerHTML = `
-    <h3>即时反馈</h3>
-    ${[...session.turns]
-      .reverse()
-      .map(
-        (turn) => `
-          <article class="turn-card">
-            <div class="turn-head">
-              <strong>第 ${turn.round_index} 轮</strong>
-              <span class="score-pill">${turn.feedback.score} 分</span>
-            </div>
-            <div class="qa-block">
-              <p><strong>问：</strong>${escapeHtml(turn.question)}</p>
-              <p><strong>答：</strong>${escapeHtml(turn.answer)}</p>
-            </div>
-            <div class="feedback-grid">
-              ${feedbackBox("亮点", turn.feedback.strengths)}
-              ${feedbackBox("漏洞", turn.feedback.gaps)}
-              ${feedbackBox("建议补充", turn.feedback.suggestions)}
-              ${feedbackBox("回答框架", turn.feedback.answer_frame)}
-            </div>
-          </article>
-        `,
-      )
-      .join("")}
+    <div class="history-heading">
+      <h3>最近反馈</h3>
+      <span class="score-pill">${latest.feedback.score} 分</span>
+    </div>
+    <article class="turn-card featured">
+      <div class="qa-block compact">
+        <p><strong>问：</strong>${escapeHtml(latest.question)}</p>
+        <p><strong>答：</strong>${escapeHtml(latest.answer)}</p>
+      </div>
+      <div class="feedback-grid">
+        ${feedbackBox("亮点", latest.feedback.strengths)}
+        ${feedbackBox("漏洞", latest.feedback.gaps)}
+        ${feedbackBox("补充点", latest.feedback.suggestions)}
+        ${feedbackBox("框架", latest.feedback.answer_frame)}
+      </div>
+    </article>
+    ${
+      previous.length
+        ? `<div class="history-list">
+            ${previous
+              .map(
+                (turn) => `
+                  <div class="history-row">
+                    <span>第 ${turn.round_index} 轮</span>
+                    <p>${escapeHtml(turn.question)}</p>
+                    <strong>${turn.feedback.score}</strong>
+                  </div>
+                `,
+              )
+              .join("")}
+          </div>`
+        : ""
+    }
   `;
 }
 
@@ -286,8 +406,13 @@ function renderReport(session) {
   const report = session.final_report;
   els.reportPanel.classList.remove("hidden");
   els.reportPanel.innerHTML = `
-    <h3>最终复盘报告</h3>
-    <p class="report-score"><strong>${report.total_score}</strong><span>/ 100</span></p>
+    <div class="report-hero">
+      <div>
+        <p class="eyebrow">Final Review</p>
+        <h3>最终复盘报告</h3>
+      </div>
+      <p class="report-score"><strong>${report.total_score}</strong><span>/ 100</span></p>
+    </div>
     <div class="report-grid">
       ${reportBlock("最容易被问穿的点", report.most_vulnerable_project_points)}
       ${reportBlock("知识薄弱点", report.knowledge_weaknesses)}
@@ -364,6 +489,7 @@ els.setupForm.addEventListener("submit", async (event) => {
       body: JSON.stringify(payload),
     });
     state.session = response.session;
+    state.activeInsight = "risk";
     saveSession(state.session);
     els.answerInput.value = "";
     render();
@@ -409,9 +535,10 @@ els.sampleBtn.addEventListener("click", () => {
   els.focus.value = "重点训练方法选择、实验可靠性、结果不好怎么解释、个人贡献和创新点不足。";
 });
 
-els.resetBtn.addEventListener("click", async () => {
+async function resetSession() {
   const sessionId = state.session?.session_id;
   state.session = null;
+  state.activeInsight = "risk";
   clearSavedSession();
   els.answerInput.value = "";
   render();
@@ -422,9 +549,31 @@ els.resetBtn.addEventListener("click", async () => {
       // Local reset should still succeed when the old backend session is already gone.
     }
   }
+}
+
+els.resetBtn.addEventListener("click", resetSession);
+
+els.setupSummary.addEventListener("click", (event) => {
+  const target = event.target.closest("button");
+  if (!target) return;
+  if (target.id === "summaryResetBtn") {
+    resetSession();
+  }
+  if (target.id === "summaryEditBtn") {
+    document.body.classList.add("editing-setup");
+    els.setupSummary.classList.add("hidden");
+    els.setupForm.classList.remove("hidden");
+  }
+});
+
+els.insightGrid.addEventListener("click", (event) => {
+  const tab = event.target.closest("[data-insight-tab]");
+  if (!tab) return;
+  state.activeInsight = tab.dataset.insightTab;
+  renderInsights(state.session);
+  renderIcons();
 });
 
 checkHealth();
 restoreSavedSession().then(render);
 renderIcons();
-
