@@ -10,8 +10,8 @@
     <div class="app-shell">
       <header class="topbar">
         <div>
-          <p class="eyebrow">AIIC 16h Challenge</p>
           <h1>问脉 <span>VivaScope</span></h1>
+          <p class="product-tagline">面向理工科本科生的项目追问与基础知识口试训练工具。</p>
         </div>
         <div class="topbar-meta">
           <span id="healthDot" class="status-dot"></span>
@@ -26,10 +26,16 @@
               <p class="eyebrow">Step 1</p>
               <h2 id="setupTitle">训练设置</h2>
             </div>
-            <button id="sampleBtn" class="ghost-btn" type="button">
-              <i data-lucide="sparkles"></i>
-              <span>填入示例</span>
-            </button>
+            <div class="heading-actions">
+              <button id="sampleBtn" class="ghost-btn" type="button">
+                <i data-lucide="sparkles"></i>
+                <span>填入示例</span>
+              </button>
+              <button id="clearInputsBtn" class="secondary-btn" type="button">
+                <i data-lucide="eraser"></i>
+                <span>清空输入</span>
+              </button>
+            </div>
           </div>
 
           <div id="setupSummary" class="setup-summary hidden"></div>

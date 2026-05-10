@@ -34,8 +34,12 @@ def main() -> None:
     assert not any(phrase in opening_question for phrase in banned_phrases), opening_question
     response = client.post(f"/api/sessions/{knowledge_session['session_id']}/answer", json={"answer": "我不会"})
     response.raise_for_status()
-    low_score = response.json()["turn"]["feedback"]["score"]
+    low_feedback = response.json()["turn"]["feedback"]
+    low_score = low_feedback["score"]
     assert low_score <= 20, low_score
+    assert low_feedback["strengths"] == [], low_feedback
+    assert low_feedback["score_reason"], low_feedback
+    assert low_feedback["rewrite"], low_feedback
 
     payload = {
         "mode": "mixed",
@@ -57,6 +61,11 @@ def main() -> None:
     session = response.json()["session"]
     session_id = session["session_id"]
     assert session["max_rounds"] == 6
+
+    standard_payload = payload | {"interview_length": "standard"}
+    response = client.post("/api/sessions", json=standard_payload)
+    response.raise_for_status()
+    assert response.json()["session"]["max_rounds"] == 12
 
     answer = (
         "我的结论是这个项目主要解决实验室安全管理中的实时检测问题。"

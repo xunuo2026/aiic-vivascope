@@ -5,6 +5,7 @@ const els = {
   healthText: document.querySelector("#healthText"),
   setupForm: document.querySelector("#setupForm"),
   sampleBtn: document.querySelector("#sampleBtn"),
+  clearInputsBtn: document.querySelector("#clearInputsBtn"),
   resetBtn: document.querySelector("#resetBtn"),
   setupSummary: document.querySelector("#setupSummary"),
   startBtn: document.querySelector("#startBtn"),
@@ -67,6 +68,9 @@ const phaseLabels = {
   knowledge: "基础知识问诊",
 };
 
+const startBtnDefaultText = "生成训练";
+const answerBtnDefaultText = "提交回答";
+
 function escapeHtml(value = "") {
   return String(value)
     .replaceAll("&", "&amp;")
@@ -83,8 +87,7 @@ function listHtml(items = []) {
 function setBusy(isBusy, label = "处理中", hint = "") {
   state.busy = isBusy;
   document.body.classList.toggle("is-busy", isBusy);
-  els.startBtn.disabled = isBusy;
-  els.answerBtn.disabled = isBusy;
+  setControlsDisabled(isBusy);
   if (isBusy) {
     els.startBtn.querySelector("span").textContent = label;
     els.answerBtn.querySelector("span").textContent = label;
@@ -92,10 +95,22 @@ function setBusy(isBusy, label = "处理中", hint = "") {
     els.loadingTitle.textContent = label;
     els.loadingHint.textContent = hint || "面试官正在分析材料和上一轮回答，请稍等。";
   } else {
-    els.startBtn.querySelector("span").textContent = "生成训练";
-    els.answerBtn.querySelector("span").textContent = "提交回答";
+    els.startBtn.querySelector("span").textContent = startBtnDefaultText;
+    els.answerBtn.querySelector("span").textContent = answerBtnDefaultText;
     els.loadingOverlay.classList.add("hidden");
   }
+}
+
+function setControlsDisabled(disabled) {
+  [
+    ...els.setupForm.querySelectorAll("input, select, textarea, button"),
+    ...els.answerForm.querySelectorAll("textarea, button"),
+    els.sampleBtn,
+    els.clearInputsBtn,
+    els.resetBtn,
+  ].forEach((control) => {
+    if (control) control.disabled = disabled;
+  });
 }
 
 async function api(path, options = {}) {
@@ -151,6 +166,11 @@ function roundsForMode(mode, length) {
 function lengthLabelForMode(mode, length) {
   const key = length || "standard";
   return `${baseLengthLabels[key] || "标准"} ${roundsForMode(mode, key)} 轮`;
+}
+
+function lengthLabelForSession(session) {
+  const key = session.input.interview_length || "standard";
+  return `${baseLengthLabels[key] || "标准"} ${session.max_rounds} 轮`;
 }
 
 function updateLengthLabels() {
@@ -265,7 +285,7 @@ function getRoundPhase(session, roundNumber) {
 function describePhasePlan(session) {
   if (session.input.mode === "project") return `全程 ${session.max_rounds} 轮项目追问`;
   if (session.input.mode === "knowledge") return `全程 ${session.max_rounds} 轮基础知识问诊`;
-  const projectRounds = Math.max(1, Math.floor(Number(session.max_rounds || 6) / 2));
+  const projectRounds = Math.max(1, Math.floor(Number(session.max_rounds || roundsForMode("mixed", session.input.interview_length)) / 2));
   return `${projectRounds} 轮项目追问 + ${session.max_rounds - projectRounds} 轮基础知识问诊`;
 }
 
@@ -283,7 +303,7 @@ function renderSetupSummary(session) {
       <div class="summary-tags">
         <span>${escapeHtml(input.scenario)}</span>
         <span>${escapeHtml(input.style)}</span>
-        <span>${escapeHtml(lengthLabelForMode(input.mode, input.interview_length || "standard"))}</span>
+        <span>${escapeHtml(lengthLabelForSession(session))}</span>
       </div>
       <dl>
         <div>
@@ -496,11 +516,30 @@ function renderHistory(session) {
                   ${feedbackBox("补充点", turn.feedback.suggestions)}
                   ${feedbackBox("框架", turn.feedback.answer_frame)}
                 </div>
+                ${renderScoreExplain(turn.feedback)}
               </div>
             </details>
           `;
         })
         .join("")}
+    </div>
+  `;
+}
+
+function renderScoreExplain(feedback) {
+  if (!feedback.score_reason && !feedback.rewrite) return "";
+  return `
+    <div class="score-explain">
+      ${
+        feedback.score_reason
+          ? `<div><h4>评分理由</h4><p>${escapeHtml(feedback.score_reason)}</p></div>`
+          : ""
+      }
+      ${
+        feedback.rewrite
+          ? `<div><h4>参考改写</h4><p>${escapeHtml(feedback.rewrite)}</p></div>`
+          : ""
+      }
     </div>
   `;
 }
@@ -629,6 +668,7 @@ els.setupForm.addEventListener("submit", async (event) => {
 });
 
 els.setupForm.addEventListener("change", (event) => {
+  if (state.busy) return;
   if (event.target.name === "mode") {
     updateLengthLabels();
   }
@@ -669,6 +709,7 @@ els.answerForm.addEventListener("submit", async (event) => {
 });
 
 els.sampleBtn.addEventListener("click", () => {
+  if (state.busy) return;
   document.querySelector('input[name="mode"][value="mixed"]').checked = true;
   document.querySelector('input[name="interview_length"][value="standard"]').checked = true;
   els.scenario.value = "保研复试";
@@ -684,7 +725,18 @@ els.sampleBtn.addEventListener("click", () => {
   updateCharCounts();
 });
 
+els.clearInputsBtn.addEventListener("click", () => {
+  if (state.busy) return;
+  els.major.value = "";
+  els.targetProfile.value = "";
+  els.project.value = "";
+  els.focus.value = "";
+  updateCharCounts();
+  els.major.focus();
+});
+
 async function resetSession() {
+  if (state.busy) return;
   const sessionId = state.session?.session_id;
   state.session = null;
   state.activeInsight = "risk";
@@ -704,6 +756,7 @@ async function resetSession() {
 els.resetBtn.addEventListener("click", resetSession);
 
 els.setupSummary.addEventListener("click", (event) => {
+  if (state.busy) return;
   const target = event.target.closest("button");
   if (!target) return;
   if (target.id === "summaryResetBtn") {

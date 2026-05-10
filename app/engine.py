@@ -75,7 +75,7 @@ class InterviewEngine:
             if result is None:
                 session.ai_source = "local_fallback"
 
-        feedback = self._calibrate_feedback_score(feedback, answer_text)
+        feedback = self._calibrate_feedback(feedback, answer_text)
         turn = Turn(
             round_index=round_index,
             question=session.current_question,
@@ -173,8 +173,12 @@ class InterviewEngine:
                     "你可以使用这些分析依据，但不能在问题里说出“风险雷达”“知识点清单”“训练模式”“本系统”等产品词。"
                     "问题必须像真实老师/导师当面追问，直接、自然、可回答。"
                     "综合模拟需要分阶段：项目追问阶段只深挖项目，基础知识问诊阶段问申请目标/岗位要求相关的直接知识题。"
+                    "你必须先判断回答有效性，再写反馈。"
+                    "如果用户只回答“我不会”“我不知道”“不清楚”、明显逃避、或没有提供任何概念/依据/实验信息：score 必须为 0-20，strengths 必须为空数组，gaps 必须明确指出没有有效信息，suggestions 必须教他如何在不会时补出最低限度回答，rewrite 必须给出一版可救场回答。"
+                    "如果回答很短但不是完全逃避，score 不得超过 40。"
                     "每轮反馈要短，但要具体指出漏洞和更稳妥的回答框架。"
                     "评分必须严格：回答“我不会”“不知道”、基本空白或明显逃避时给 0-20 分；只有空泛概念无依据给 21-45 分；有结构但缺证据给 46-70 分；具体、准确、有证据和边界才给 71 分以上。"
+                    "score_reason 必须解释为什么给这个分数，不能写空。rewrite 必须给出更稳妥的示范回答，不能写空。"
                     "请只返回严格 JSON。"
                 ),
             },
@@ -194,7 +198,7 @@ class InterviewEngine:
                     "若追问风格是压力追问型，问题可以更尖锐，但不要羞辱用户。\n\n"
                     "返回 JSON 格式："
                     "{"
-                    '"feedback":{"strengths":[],"gaps":[],"suggestions":[],"answer_frame":[],"score":80},'
+                    '"feedback":{"strengths":[],"gaps":[],"suggestions":[],"answer_frame":[],"score":80,"score_reason":"","rewrite":""},'
                     '"next_question":""'
                     "}"
                 ),
@@ -207,7 +211,9 @@ class InterviewEngine:
                 "role": "system",
                 "content": (
                     "你是问脉 VivaScope 的口试反馈教练。请只返回严格 JSON。"
+                    "你必须先判断回答有效性。若用户只说“我不会”“我不知道”“不清楚”或明显逃避，score 必须为 0-20，strengths 必须为空数组，不得硬写亮点。"
                     "评分必须严格：回答“我不会”“不知道”、基本空白或明显逃避时给 0-20 分；只有空泛概念无依据给 21-45 分；具体、准确、有证据和边界才给高分。"
+                    "score_reason 必须解释扣分原因，rewrite 必须给出一版可救场回答。"
                 ),
             },
             {
@@ -221,7 +227,7 @@ class InterviewEngine:
                     "请只给出本轮即时反馈，不要再生成下一题。"
                     "返回 JSON 格式："
                     "{"
-                    '"feedback":{"strengths":[],"gaps":[],"suggestions":[],"answer_frame":[],"score":80}'
+                    '"feedback":{"strengths":[],"gaps":[],"suggestions":[],"answer_frame":[],"score":80,"score_reason":"","rewrite":""}'
                     "}"
                 ),
             },
@@ -324,18 +330,86 @@ class InterviewEngine:
         except ValidationError:
             return fallback_feedback
 
-    def _calibrate_feedback_score(self, feedback: Feedback, answer_text: str) -> Feedback:
+    def _calibrate_feedback(self, feedback: Feedback, answer_text: str) -> Feedback:
         answer = answer_text.strip()
-        low_effort = re.fullmatch(r"(我不会|不会|不知道|不清楚|没想过|不了解|不太懂|不知道。|我不知道。|不会。|不清楚。)", answer)
+        if self._is_low_effort_answer(answer):
+            return self._low_effort_feedback(answer)
         if not answer:
-            feedback.score = 0
-        elif low_effort:
-            feedback.score = min(feedback.score, 15)
+            return self._low_effort_feedback(answer)
         elif len(answer) < 12:
             feedback.score = min(feedback.score, 25)
+            feedback.score_reason = feedback.score_reason or "回答过短，只能判断出非常有限的信息，按 25 分以内处理。"
         elif len(answer) < 35 and not re.search(r"因为|所以|例如|数据|指标|实验|对比|条件|假设|局限", answer):
             feedback.score = min(feedback.score, 40)
+            feedback.score_reason = feedback.score_reason or "回答缺少依据、例子或边界条件，按 40 分以内处理。"
+        else:
+            feedback.score_reason = feedback.score_reason or self._default_score_reason(feedback.score)
+        feedback.rewrite = feedback.rewrite or self._default_rewrite(answer)
         return feedback
+
+    def _is_low_effort_answer(self, answer_text: str) -> bool:
+        normalized = re.sub(r"[\s，。,.！!？?；;：:、~…“”\"'（）()]", "", answer_text.strip().lower())
+        if not normalized:
+            return True
+        exact_low_effort = {
+            "我不会",
+            "不会",
+            "我不知道",
+            "不知道",
+            "我不清楚",
+            "不清楚",
+            "没想过",
+            "不了解",
+            "不太懂",
+            "不懂",
+            "答不上来",
+            "不会答",
+        }
+        if normalized in exact_low_effort:
+            return True
+        has_evasive_phrase = re.search(r"不会|不知道|不清楚|不懂|不了解|没想过|答不上", normalized)
+        has_evidence = re.search(r"\d|%|因为|所以|例如|数据|指标|实验|对比|条件|假设|局限|定义|原理|方法|验证", answer_text)
+        return bool(has_evasive_phrase and len(normalized) <= 18 and not has_evidence)
+
+    def _low_effort_feedback(self, answer_text: str) -> Feedback:
+        score = 0 if not answer_text.strip() else 8
+        return Feedback(
+            strengths=[],
+            gaps=[
+                "回答没有提供概念、依据、实验细节或排查路径，真实面试中基本无法得分。",
+                "没有回应当前问题的核心追问点，会被判断为准备不足或项目理解不扎实。",
+            ],
+            suggestions=[
+                "即使不会完整回答，也要先说出一个你确定的定义、判断标准或相关实验现象。",
+                "用“我能先从哪里查、怎么验证、可能有哪些原因”补出最基本的思考路径。",
+            ],
+            answer_frame=[
+                "我目前不能完整回答，但可以先说明我确定的部分",
+                "这个问题的核心判断标准是……",
+                "如果要验证，我会先检查……",
+                "我需要补充复习的是……",
+            ],
+            score=score,
+            score_reason="低努力回答：未提供可评分的信息，按 0-20 分区间处理。",
+            rewrite=(
+                "我目前不能完整回答，但我会先从一个确定点入手：这个问题需要说明核心概念、判断依据和验证方法。"
+                "如果继续排查，我会先看数据/实验设置是否可靠，再看指标和结论之间是否匹配。"
+            ),
+        )
+
+    def _default_score_reason(self, score: int) -> str:
+        if score <= 20:
+            return "回答基本没有有效信息，按 0-20 分区间处理。"
+        if score <= 45:
+            return "回答有少量方向，但缺少清晰定义、证据或推理链。"
+        if score <= 70:
+            return "回答有基本结构，但证据、边界条件或个人贡献说明还不够稳定。"
+        return "回答较完整，能给出依据和边界，但仍可继续压实细节。"
+
+    def _default_rewrite(self, answer_text: str) -> str:
+        if not answer_text.strip():
+            return ""
+        return "建议改成：先给直接结论，再补关键依据、一个可量化证据，最后说明局限或下一步验证方式。"
 
     def _fallback_initial(self, request: StartRequest) -> dict:
         needs_project = request.mode in {"project", "mixed"}
@@ -417,18 +491,8 @@ class InterviewEngine:
         gaps = []
         suggestions = []
 
-        low_effort = re.fullmatch(
-            r"(我不会|不会|不知道|不清楚|没想过|不了解|不太懂|不知道。|我不知道。|不会。|不清楚。)",
-            answer,
-        )
-        if not answer or low_effort:
-            return Feedback(
-                strengths=[],
-                gaps=["回答基本没有提供可判断的信息，真实面试里会被继续追问。"],
-                suggestions=["即使不确定，也要先说出你能确定的定义、判断依据和一个排查方向。"],
-                answer_frame=["先承认不确定的部分", "补一个你确定的基础定义", "说出可能的判断依据", "给出下一步查证方式"],
-                score=0 if not answer else 12,
-            )
+        if self._is_low_effort_answer(answer):
+            return self._low_effort_feedback(answer)
 
         if len(answer) >= 80:
             strengths.append("回答有一定展开，不是只给结论。")
@@ -456,6 +520,8 @@ class InterviewEngine:
             suggestions=suggestions or ["下一轮尽量用一个具体实验、数据或对比来支撑判断。"],
             answer_frame=["先给结论", "说明关键依据或方法", "补一个量化证据", "交代局限和可改进点"],
             score=score,
+            score_reason=self._default_score_reason(score),
+            rewrite=self._default_rewrite(answer),
         )
 
     def _fallback_next_question(self, session: SessionState, round_number: int) -> str:

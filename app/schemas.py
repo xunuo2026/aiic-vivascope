@@ -51,6 +51,8 @@ class Feedback(BaseModel):
     suggestions: list[str] = Field(default_factory=list)
     answer_frame: list[str] = Field(default_factory=list)
     score: int = Field(ge=0, le=100)
+    score_reason: str = ""
+    rewrite: str = ""
 
 
 class Turn(BaseModel):
