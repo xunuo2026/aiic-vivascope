@@ -1,6 +1,12 @@
 const STORAGE_KEY = "vivascope.session.v1";
 
 const els = {
+  landingScreen: document.querySelector("#landingScreen"),
+  workbenchShell: document.querySelector("#workbenchShell"),
+  enterWorkbenchBtn: document.querySelector("#enterWorkbenchBtn"),
+  landingSampleBtn: document.querySelector("#landingSampleBtn"),
+  landingHealthDot: document.querySelector("#landingHealthDot"),
+  landingHealthText: document.querySelector("#landingHealthText"),
   healthDot: document.querySelector("#healthDot"),
   healthText: document.querySelector("#healthText"),
   setupForm: document.querySelector("#setupForm"),
@@ -48,6 +54,7 @@ const state = {
   busy: false,
   activeInsight: "risk",
   resumeDraft: null,
+  workbenchOpen: false,
 };
 
 const modeLabels = {
@@ -146,6 +153,15 @@ function saveSession(session) {
 
 function clearSavedSession() {
   localStorage.removeItem(STORAGE_KEY);
+}
+
+function showWorkbench() {
+  state.workbenchOpen = true;
+  els.landingScreen.classList.add("hidden");
+  els.workbenchShell.classList.remove("hidden");
+  document.body.classList.add("workbench-open");
+  window.scrollTo({ top: 0, behavior: "smooth" });
+  renderIcons();
 }
 
 function renderResumeStatus(kind = "idle", html = "没有简历也没关系，可以继续手动填写。") {
@@ -617,12 +633,18 @@ function reportBlock(title, items) {
 async function checkHealth() {
   try {
     const health = await api("/health");
-    els.healthDot.className = health.api_key_configured && health.model_configured ? "status-dot ok" : "status-dot warn";
-    els.healthText.textContent =
-      health.api_key_configured && health.model_configured ? "千问已配置" : "演示模式";
+    const ok = health.api_key_configured && health.model_configured;
+    const className = ok ? "status-dot ok" : "status-dot warn";
+    const label = ok ? "千问已配置" : "演示模式";
+    els.healthDot.className = className;
+    els.landingHealthDot.className = className;
+    els.healthText.textContent = label;
+    els.landingHealthText.textContent = label;
   } catch {
     els.healthDot.className = "status-dot error";
+    els.landingHealthDot.className = "status-dot error";
     els.healthText.textContent = "后端未连接";
+    els.landingHealthText.textContent = "后端未连接";
   }
 }
 
@@ -721,7 +743,7 @@ els.answerForm.addEventListener("submit", async (event) => {
   }
 });
 
-els.sampleBtn.addEventListener("click", () => {
+function fillSampleForm() {
   if (state.busy) return;
   document.querySelector('input[name="mode"][value="mixed"]').checked = true;
   document.querySelector('input[name="interview_length"][value="standard"]').checked = true;
@@ -736,6 +758,19 @@ els.sampleBtn.addEventListener("click", () => {
   updateLengthLabels();
   updateSegmentedIndicators();
   updateCharCounts();
+}
+
+els.sampleBtn.addEventListener("click", () => {
+  fillSampleForm();
+});
+
+els.enterWorkbenchBtn.addEventListener("click", () => {
+  showWorkbench();
+});
+
+els.landingSampleBtn.addEventListener("click", () => {
+  fillSampleForm();
+  showWorkbench();
 });
 
 els.clearInputsBtn.addEventListener("click", () => {

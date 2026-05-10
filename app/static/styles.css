@@ -55,6 +55,172 @@ button {
   padding: 22px;
 }
 
+.landing-screen {
+  position: relative;
+  display: grid;
+  min-height: calc(100vh - 44px);
+  overflow: hidden;
+  border: 1px solid rgba(215, 222, 217, 0.92);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  background: #0c4d45;
+}
+
+.landing-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.landing-shade {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgba(8, 34, 31, 0.92), rgba(8, 34, 31, 0.72) 42%, rgba(8, 34, 31, 0.2)),
+    linear-gradient(180deg, rgba(8, 34, 31, 0.18), rgba(8, 34, 31, 0.78));
+}
+
+.landing-nav,
+.landing-content,
+.landing-capabilities {
+  position: relative;
+  z-index: 1;
+}
+
+.landing-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 22px 26px;
+}
+
+.landing-brand,
+.landing-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #f8faf6;
+  font-weight: 850;
+}
+
+.landing-brand img {
+  width: 42px;
+  height: 42px;
+  border-radius: 8px;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.22);
+}
+
+.landing-status {
+  min-height: 36px;
+  padding: 0 12px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  backdrop-filter: blur(14px);
+  font-size: 13px;
+}
+
+.landing-content {
+  align-self: center;
+  max-width: 780px;
+  padding: clamp(54px, 8vw, 110px) 26px 28px;
+}
+
+.landing-content .eyebrow {
+  color: #e7c789;
+}
+
+.landing-content h1 {
+  margin: 0;
+  max-width: 760px;
+  color: #fffdf7;
+  font-size: clamp(46px, 8vw, 94px);
+  line-height: 0.98;
+  font-weight: 900;
+}
+
+.landing-copy {
+  max-width: 680px;
+  margin: 22px 0 0;
+  color: rgba(255, 253, 247, 0.84);
+  font-size: clamp(17px, 2vw, 22px);
+  line-height: 1.7;
+}
+
+.landing-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 30px;
+}
+
+.landing-primary,
+.landing-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 50px;
+  padding: 0 20px;
+  border-radius: 8px;
+  font-weight: 850;
+  border: 1px solid transparent;
+}
+
+.landing-primary {
+  color: #0c302c;
+  background: #fffdf7;
+  box-shadow: 0 18px 36px rgba(0, 0, 0, 0.24);
+}
+
+.landing-secondary {
+  color: #fffdf7;
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.28);
+  backdrop-filter: blur(14px);
+}
+
+.landing-capabilities {
+  align-self: end;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  margin: 0 26px 26px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 8px;
+  backdrop-filter: blur(14px);
+}
+
+.landing-capabilities div {
+  min-width: 0;
+  padding: 18px;
+  background: rgba(255, 255, 255, 0.11);
+}
+
+.landing-capabilities strong,
+.landing-capabilities span {
+  display: block;
+}
+
+.landing-capabilities strong {
+  color: #fffdf7;
+  font-size: 16px;
+}
+
+.landing-capabilities span {
+  margin-top: 8px;
+  color: rgba(255, 253, 247, 0.72);
+  line-height: 1.55;
+}
+
+.workbench-shell {
+  display: block;
+}
+
 .topbar {
   display: flex;
   align-items: center;
@@ -77,17 +243,12 @@ button {
 }
 
 .brand-seal {
-  display: grid;
-  place-items: center;
   width: 54px;
   height: 54px;
   flex: 0 0 54px;
-  color: #fff;
-  background: linear-gradient(135deg, var(--teal-dark), var(--teal));
+  object-fit: cover;
   border-radius: 8px;
   box-shadow: 0 14px 28px rgba(18, 105, 93, 0.22);
-  font-size: 26px;
-  font-weight: 900;
 }
 
 .topbar h1,
@@ -1236,6 +1397,30 @@ button svg {
 @media (max-width: 760px) {
   .app-shell {
     padding: 12px;
+  }
+
+  .landing-screen {
+    min-height: calc(100vh - 24px);
+  }
+
+  .landing-nav {
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 18px;
+  }
+
+  .landing-content {
+    padding: 42px 18px 24px;
+  }
+
+  .landing-actions,
+  .landing-actions button {
+    width: 100%;
+  }
+
+  .landing-capabilities {
+    grid-template-columns: 1fr;
+    margin: 0 18px 18px;
   }
 
   .topbar,

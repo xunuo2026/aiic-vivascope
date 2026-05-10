@@ -8,9 +8,54 @@
   </head>
   <body>
     <div class="app-shell">
+      <section id="landingScreen" class="landing-screen" aria-labelledby="landingTitle">
+        <img class="landing-bg" src="/static/assets/vivascope-hero.png" alt="" />
+        <div class="landing-shade"></div>
+        <div class="landing-nav">
+          <div class="landing-brand">
+            <img src="/static/assets/vivascope-mark.svg" alt="问脉 VivaScope logo" />
+            <span>问脉 VivaScope</span>
+          </div>
+          <div class="landing-status">
+            <span id="landingHealthDot" class="status-dot"></span>
+            <span id="landingHealthText">连接中</span>
+          </div>
+        </div>
+        <div class="landing-content">
+          <p class="eyebrow">AI Oral Defense Training</p>
+          <h1 id="landingTitle">把项目经历练到经得起追问</h1>
+          <p class="landing-copy">面向保研复试、科研答辩、实验室面试和技术实习的 AI 口试训练工具，先分析项目脉络，再进行连续追问与结构化复盘。</p>
+          <div class="landing-actions">
+            <button id="enterWorkbenchBtn" class="landing-primary" type="button">
+              <i data-lucide="arrow-right"></i>
+              <span>开始模拟面试</span>
+            </button>
+            <button id="landingSampleBtn" class="landing-secondary" type="button">
+              <i data-lucide="sparkles"></i>
+              <span>用示例进入训练台</span>
+            </button>
+          </div>
+        </div>
+        <div class="landing-capabilities" aria-label="核心能力">
+          <div>
+            <strong>项目脉络分析</strong>
+            <span>提取动机、方法、实验依据与个人贡献。</span>
+          </div>
+          <div>
+            <strong>连续追问模拟</strong>
+            <span>围绕漏洞推进，而不是随机问通用题。</span>
+          </div>
+          <div>
+            <strong>结构化复盘报告</strong>
+            <span>沉淀风险点、知识薄弱点与下一轮任务。</span>
+          </div>
+        </div>
+      </section>
+
+      <div id="workbenchShell" class="workbench-shell hidden">
       <header class="topbar">
         <div class="brand-lockup">
-          <div class="brand-seal">问</div>
+          <img class="brand-seal" src="/static/assets/vivascope-mark.svg" alt="问脉 VivaScope logo" />
           <div>
             <h1>问脉 <span>VivaScope</span></h1>
             <p class="product-tagline">面向理工科本科生的项目追问与基础知识口试训练工具。</p>
@@ -250,6 +295,7 @@
           </div>
         </section>
       </main>
+      </div>
     </div>
 
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>

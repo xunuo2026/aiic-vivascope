@@ -68,6 +68,9 @@ def main() -> None:
     opening_question = knowledge_session["current_question"]
     banned_phrases = ["结合保研复试", "面试场景", "为什么可能被问到", "风险雷达", "知识点清单"]
     assert not any(phrase in opening_question for phrase in banned_phrases), opening_question
+    knowledge_names = {item["name"] for item in knowledge_session["knowledge_points"]}
+    assert len(knowledge_names) >= 5, knowledge_names
+    assert {"模型泛化与过拟合", "概率统计与实验置信"} & knowledge_names, knowledge_names
     response = client.post(f"/api/sessions/{knowledge_session['session_id']}/answer", json={"answer": "我不会"})
     response.raise_for_status()
     low_feedback = response.json()["turn"]["feedback"]
