@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>问脉 VivaScope | AI 模拟面试官</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">AIIC 16h Challenge</p>
+          <h1>问脉 <span>VivaScope</span></h1>
+        </div>
+        <div class="topbar-meta">
+          <span id="healthDot" class="status-dot"></span>
+          <span id="healthText">连接中</span>
+        </div>
+      </header>
+
+      <main class="workspace">
+        <section class="setup-panel" aria-labelledby="setupTitle">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Step 1</p>
+              <h2 id="setupTitle">训练设置</h2>
+            </div>
+            <button id="sampleBtn" class="ghost-btn" type="button">
+              <i data-lucide="sparkles"></i>
+              <span>填入示例</span>
+            </button>
+          </div>
+
+          <form id="setupForm" class="setup-form">
+            <fieldset>
+              <legend>训练模式</legend>
+              <div class="segmented-control">
+                <label>
+                  <input type="radio" name="mode" value="project" checked />
+                  <span>只练项目追问</span>
+                </label>
+                <label>
+                  <input type="radio" name="mode" value="mixed" />
+                  <span>综合模拟</span>
+                </label>
+                <label>
+                  <input type="radio" name="mode" value="knowledge" />
+                  <span>只练基础知识</span>
+                </label>
+              </div>
+            </fieldset>
+
+            <div class="form-grid">
+              <label>
+                <span>面试场景</span>
+                <select id="scenario" name="scenario">
+                  <option>保研复试</option>
+                  <option>科研项目答辩</option>
+                  <option>课程项目展示</option>
+                  <option>实验室面试</option>
+                  <option>技术类实习面试</option>
+                </select>
+              </label>
+              <label>
+                <span>追问风格</span>
+                <select id="style" name="style">
+                  <option>严格导师型</option>
+                  <option>温和学长型</option>
+                  <option>压力追问型</option>
+                </select>
+              </label>
+            </div>
+
+            <label>
+              <span>专业背景</span>
+              <input id="major" name="major" required maxlength="120" placeholder="例如：人工智能专业，大三，做过机器学习课程项目" />
+            </label>
+
+            <label>
+              <span>项目经历</span>
+              <textarea
+                id="project"
+                name="project"
+                rows="9"
+                maxlength="6000"
+                placeholder="粘贴你的项目经历：背景、目标、方法、数据/实验、结果、个人贡献、创新点和不足。项目追问模式会重点使用这里。"
+              ></textarea>
+            </label>
+
+            <label>
+              <span>想重点训练的方向</span>
+              <textarea
+                id="focus"
+                name="focus"
+                rows="3"
+                maxlength="800"
+                placeholder="例如：怕被问为什么选这个方法、实验结果一般怎么解释、个人贡献说不清。"
+              ></textarea>
+            </label>
+
+            <div class="form-actions">
+              <button id="startBtn" class="primary-btn" type="submit">
+                <i data-lucide="play"></i>
+                <span>生成训练</span>
+              </button>
+              <button id="resetBtn" class="secondary-btn" type="button">
+                <i data-lucide="rotate-ccw"></i>
+                <span>重新开始</span>
+              </button>
+            </div>
+          </form>
+        </section>
+
+        <section class="training-panel" aria-live="polite">
+          <div id="emptyState" class="empty-state">
+            <p class="eyebrow">Step 2</p>
+            <h2>从项目脉络开始，而不是从空聊天框开始</h2>
+            <p>生成后会看到项目脉络图、追问风险雷达、知识点清单，并进入 6 轮一问一答模拟。</p>
+          </div>
+
+          <div id="sessionView" class="session-view hidden">
+            <div class="section-heading">
+              <div>
+                <p id="modeLabel" class="eyebrow">项目追问</p>
+                <h2>训练台</h2>
+              </div>
+              <div class="round-pill">
+                <i data-lucide="timer"></i>
+                <span id="roundLabel">第 1 / 6 轮</span>
+              </div>
+            </div>
+
+            <div id="warningBox" class="warning-box hidden"></div>
+
+            <div id="insightGrid" class="insight-grid"></div>
+
+            <section id="questionPanel" class="question-panel">
+              <div class="question-head">
+                <p class="eyebrow">当前追问</p>
+                <span id="styleLabel"></span>
+              </div>
+              <p id="currentQuestion" class="question-text"></p>
+              <form id="answerForm" class="answer-form">
+                <textarea id="answerInput" rows="6" maxlength="5000" placeholder="像真实口试一样作答：先给结论，再补依据、数据和局限。"></textarea>
+                <div class="form-actions">
+                  <button id="answerBtn" class="primary-btn" type="submit">
+                    <i data-lucide="send"></i>
+                    <span>提交回答</span>
+                  </button>
+                </div>
+              </form>
+            </section>
+
+            <section id="historyPanel" class="history-panel"></section>
+            <section id="reportPanel" class="report-panel hidden"></section>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+    <script src="/static/app.js"></script>
+  </body>
+</html>
+
