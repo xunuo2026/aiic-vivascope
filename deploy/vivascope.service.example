@@ -1,0 +1,15 @@
+[Unit]
+Description=VivaScope AI oral interview training app
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/aiic-vivascope
+EnvironmentFile=/opt/aiic-vivascope/.env
+ExecStart=/opt/aiic-vivascope/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+
