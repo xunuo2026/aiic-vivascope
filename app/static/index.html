@@ -12,11 +12,7 @@
         <img class="landing-bg" src="/static/assets/vivascope-hero.png" alt="" />
         <div class="landing-shade"></div>
         <div class="landing-nav">
-          <div class="landing-brand">
-            <img src="/static/assets/vivascope-mark.svg" alt="问脉 VivaScope logo" />
-            <span>问脉 VivaScope</span>
-          </div>
-          <div class="landing-status">
+          <div class="landing-status" data-tip="显示本地服务与模型配置状态">
             <span id="landingHealthDot" class="status-dot"></span>
             <span id="landingHealthText">连接中</span>
           </div>
@@ -28,11 +24,11 @@
           <p class="landing-slogan">把项目经历练到经得起追问</p>
           <p class="landing-copy">面向保研复试、科研答辩、实验室面试和技术实习的 AI 口试训练工具，先分析项目脉络，再进行连续追问与结构化复盘。</p>
           <div class="landing-actions">
-            <button id="enterWorkbenchBtn" class="landing-primary" type="button">
+            <button id="enterWorkbenchBtn" class="landing-primary" type="button" data-tip="进入训练台，手动填写申请目标和项目经历">
               <i data-lucide="arrow-right"></i>
               <span>开始模拟面试</span>
             </button>
-            <button id="landingSampleBtn" class="landing-secondary" type="button">
+            <button id="landingSampleBtn" class="landing-secondary" type="button" data-tip="自动填入一组安全帽检测示例，方便快速看 Demo">
               <i data-lucide="sparkles"></i>
               <span>用示例进入训练台</span>
             </button>
@@ -64,7 +60,11 @@
           </div>
         </div>
         <div class="topbar-side">
-          <div class="topbar-meta">
+          <button id="homeBtn" class="secondary-btn topbar-home" type="button" data-tip="回到首页导引，不会清空当前训练记录">
+            <i data-lucide="home"></i>
+            <span>回到主页</span>
+          </button>
+          <div class="topbar-meta" data-tip="显示后端服务与千问模型配置状态">
             <span id="healthDot" class="status-dot"></span>
             <span id="healthText">连接中</span>
           </div>
@@ -84,11 +84,11 @@
               <h2 id="setupTitle">训练设置</h2>
             </div>
             <div class="heading-actions">
-              <button id="sampleBtn" class="ghost-btn" type="button">
+              <button id="sampleBtn" class="ghost-btn" type="button" data-tip="填入一组可直接演示的综合模拟样例">
                 <i data-lucide="sparkles"></i>
                 <span>填入示例</span>
               </button>
-              <button id="clearInputsBtn" class="secondary-btn" type="button">
+              <button id="clearInputsBtn" class="secondary-btn" type="button" data-tip="清空当前表单，但不会删除已完成的历史提交">
                 <i data-lucide="eraser"></i>
                 <span>清空输入</span>
               </button>
@@ -106,11 +106,11 @@
               </div>
               <div class="resume-actions">
                 <input id="resumeFile" type="file" accept="application/pdf,.pdf" hidden />
-                <button id="resumeSelectBtn" class="secondary-btn" type="button">
+                <button id="resumeSelectBtn" class="secondary-btn" type="button" data-tip="上传简历 PDF，自动提取专业背景和项目经历草稿">
                   <i data-lucide="file-up"></i>
                   <span>上传 PDF</span>
                 </button>
-                <button id="resumeApplyBtn" class="ghost-btn hidden" type="button">
+                <button id="resumeApplyBtn" class="ghost-btn hidden" type="button" data-tip="把解析出的建议写入左侧表单">
                   <i data-lucide="wand-sparkles"></i>
                   <span>应用建议</span>
                 </button>
@@ -121,15 +121,15 @@
             <fieldset>
               <legend>训练模式</legend>
               <div class="segmented-control">
-                <label>
+                <label data-tip="专注项目经历连续追问，适合复试或答辩前查漏洞">
                   <input type="radio" name="mode" value="project" checked />
                   <span>只练项目追问</span>
                 </label>
-                <label>
+                <label data-tip="先项目追问，再进入申请目标导向的基础知识问诊">
                   <input type="radio" name="mode" value="mixed" />
                   <span>综合模拟</span>
                 </label>
-                <label>
+                <label data-tip="只围绕申请目标出基础知识题，不使用项目经历">
                   <input type="radio" name="mode" value="knowledge" />
                   <span>只练基础知识</span>
                 </label>
@@ -139,15 +139,15 @@
             <fieldset>
               <legend>训练长度</legend>
               <div class="segmented-control length-control">
-                <label>
+                <label data-tip="短面试：适合快速检查最明显短板">
                   <input type="radio" name="interview_length" value="short" />
                   <span id="lengthShortLabel">快速</span>
                 </label>
-                <label>
+                <label data-tip="标准面试：适合一次完整 Demo 或常规训练">
                   <input type="radio" name="interview_length" value="standard" checked />
                   <span id="lengthStandardLabel">标准</span>
                 </label>
-                <label>
+                <label data-tip="长面试：适合系统压测表达和知识覆盖面">
                   <input type="radio" name="interview_length" value="deep" />
                   <span id="lengthDeepLabel">深度</span>
                 </label>
@@ -156,7 +156,7 @@
             </fieldset>
 
             <div class="form-grid">
-              <label>
+              <label class="wide-field" data-tip="选择真实口试发生的场景，用于调整考察重点">
                 <span>面试场景</span>
                 <select id="scenario" name="scenario">
                   <option>保研复试</option>
@@ -166,17 +166,9 @@
                   <option>技术类实习面试</option>
                 </select>
               </label>
-              <label>
-                <span>追问风格</span>
-                <select id="style" name="style">
-                  <option>严格导师型</option>
-                  <option>温和学长型</option>
-                  <option>压力追问型</option>
-                </select>
-              </label>
             </div>
 
-            <label>
+            <label data-tip="填写专业、年级和相关课程背景，帮助控制问题难度">
               <span class="label-row">
                 <span>专业背景</span>
                 <small data-counter-for="major">0 / 120</small>
@@ -184,7 +176,7 @@
               <input id="major" name="major" required maxlength="120" placeholder="例如：人工智能专业，大三，做过机器学习课程项目" />
             </label>
 
-            <label>
+            <label data-tip="基础知识问诊将完全优先参考这里：导师方向、实验室方向、岗位 JD 或复试要求">
               <span class="label-row">
                 <span>申请/面试目标</span>
                 <small data-counter-for="targetProfile">0 / 1200</small>
@@ -199,7 +191,7 @@
               <p class="field-hint">基础知识问诊会优先参考这里，项目追问也会按目标方向调整标准。</p>
             </label>
 
-            <label>
+            <label data-tip="项目追问和综合模拟会使用这里；只练基础知识时不会发送给出题模型">
               <span class="label-row">
                 <span>项目经历</span>
                 <small data-counter-for="project">0 / 6000</small>
@@ -213,7 +205,7 @@
               ></textarea>
             </label>
 
-            <label>
+            <label data-tip="项目追问会参考这里聚焦短板；只练基础知识时不会发送给出题模型">
               <span class="label-row">
                 <span>想重点训练的方向</span>
                 <small data-counter-for="focus">0 / 800</small>
@@ -228,11 +220,11 @@
             </label>
 
             <div class="form-actions">
-              <button id="startBtn" class="primary-btn" type="submit">
+              <button id="startBtn" class="primary-btn" type="submit" data-tip="根据当前设置生成本轮训练">
                 <i data-lucide="play"></i>
                 <span>生成训练</span>
               </button>
-              <button id="resetBtn" class="secondary-btn" type="button">
+              <button id="resetBtn" class="secondary-btn" type="button" data-tip="结束当前会话，重新填写一轮训练">
                 <i data-lucide="rotate-ccw"></i>
                 <span>重新开始</span>
               </button>
@@ -272,16 +264,16 @@
                 <div class="question-head">
                   <div>
                     <p class="eyebrow">面试官追问</p>
-                    <span id="styleLabel"></span>
+                    <span id="scenarioLabel"></span>
                   </div>
-                  <span id="phaseBadge" class="live-badge">项目追问</span>
+                  <span id="phaseBadge" class="live-badge" data-tip="提示当前处在项目追问还是基础知识问诊阶段">项目追问</span>
                 </div>
                 <p id="currentQuestion" class="question-text"></p>
                 <form id="answerForm" class="answer-form">
                   <textarea id="answerInput" rows="7" maxlength="5000" placeholder="像真实口试一样作答：先给结论，再补依据、数据和局限。"></textarea>
                   <div class="form-actions">
                     <span class="answer-counter" data-counter-for="answerInput">0 / 5000</span>
-                    <button id="answerBtn" class="primary-btn" type="submit">
+                    <button id="answerBtn" class="primary-btn" type="submit" data-tip="提交本轮回答，获得即时反馈和下一问">
                       <i data-lucide="send"></i>
                       <span>提交回答</span>
                     </button>

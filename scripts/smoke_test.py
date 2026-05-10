@@ -56,7 +56,6 @@ def main() -> None:
         "mode": "knowledge",
         "interview_length": "short",
         "scenario": "保研复试",
-        "style": "严格导师型",
         "major": "人工智能专业，大三，做过机器学习和计算机视觉课程项目",
         "target_profile": "保研申请智能感知方向导师，研究内容包括计算机视觉、模型泛化和可靠评估。",
         "project": "",
@@ -71,6 +70,25 @@ def main() -> None:
     knowledge_names = {item["name"] for item in knowledge_session["knowledge_points"]}
     assert len(knowledge_names) >= 5, knowledge_names
     assert {"模型泛化与过拟合", "概率统计与实验置信"} & knowledge_names, knowledge_names
+
+    target_only_payload = knowledge_payload | {
+        "target_profile": "保研申请材料学院新能源电池材料方向导师，研究锂离子电池正极材料表征、结构稳定性和电化学性能。",
+        "project": "我做了一个 YOLO 安全帽检测项目，调过输入尺寸、mAP 和置信度阈值。",
+        "focus": "安全帽检测项目里模型阈值和输入尺寸解释不清楚。",
+    }
+    response = client.post("/api/sessions", json=target_only_payload)
+    response.raise_for_status()
+    target_only_session = response.json()["session"]
+    combined_knowledge_text = " ".join(
+        [target_only_session["current_question"]]
+        + [
+            f"{item['name']} {item['why_relevant']} {item['probe_example']}"
+            for item in target_only_session["knowledge_points"]
+        ]
+    )
+    leaked_terms = ["安全帽", "YOLO", "mAP", "置信度", "阈值", "输入尺寸"]
+    assert not any(term in combined_knowledge_text for term in leaked_terms), combined_knowledge_text
+
     response = client.post(f"/api/sessions/{knowledge_session['session_id']}/answer", json={"answer": "我不会"})
     response.raise_for_status()
     low_feedback = response.json()["turn"]["feedback"]
@@ -91,7 +109,6 @@ def main() -> None:
         "mode": "mixed",
         "interview_length": "short",
         "scenario": "保研复试",
-        "style": "严格导师型",
         "major": "人工智能专业，大三，做过机器学习和计算机视觉课程项目",
         "target_profile": "保研申请智能感知与机器人实验室，导师方向包括视觉检测、多模态感知和机器人操作。",
         "project": (

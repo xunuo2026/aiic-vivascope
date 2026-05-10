@@ -1,10 +1,11 @@
-const STORAGE_KEY = "vivascope.session.v1";
+const STORAGE_KEY = "vivascope.session.v2";
 
 const els = {
   landingScreen: document.querySelector("#landingScreen"),
   workbenchShell: document.querySelector("#workbenchShell"),
   enterWorkbenchBtn: document.querySelector("#enterWorkbenchBtn"),
   landingSampleBtn: document.querySelector("#landingSampleBtn"),
+  homeBtn: document.querySelector("#homeBtn"),
   landingHealthDot: document.querySelector("#landingHealthDot"),
   landingHealthText: document.querySelector("#landingHealthText"),
   healthDot: document.querySelector("#healthDot"),
@@ -24,7 +25,6 @@ const els = {
   lengthDeepLabel: document.querySelector("#lengthDeepLabel"),
   lengthHint: document.querySelector("#lengthHint"),
   scenario: document.querySelector("#scenario"),
-  style: document.querySelector("#style"),
   major: document.querySelector("#major"),
   targetProfile: document.querySelector("#targetProfile"),
   project: document.querySelector("#project"),
@@ -32,7 +32,7 @@ const els = {
   emptyState: document.querySelector("#emptyState"),
   sessionView: document.querySelector("#sessionView"),
   modeLabel: document.querySelector("#modeLabel"),
-  styleLabel: document.querySelector("#styleLabel"),
+  scenarioLabel: document.querySelector("#scenarioLabel"),
   roundLabel: document.querySelector("#roundLabel"),
   phaseBadge: document.querySelector("#phaseBadge"),
   warningBox: document.querySelector("#warningBox"),
@@ -173,6 +173,18 @@ function showWorkbench() {
   }, 650);
 }
 
+function showLanding() {
+  state.workbenchOpen = false;
+  els.workbenchShell.classList.add("hidden");
+  els.landingScreen.classList.remove("hidden", "is-leaving");
+  els.landingScreen.classList.add("is-returning");
+  document.body.classList.remove("workbench-open");
+  window.scrollTo({ top: 0, behavior: "smooth" });
+  window.setTimeout(() => {
+    els.landingScreen.classList.remove("is-returning");
+  }, 620);
+}
+
 function renderResumeStatus(kind = "idle", html = "没有简历也没关系，可以继续手动填写。") {
   els.resumeStatus.className = `resume-status ${kind}`;
   els.resumeStatus.innerHTML = html;
@@ -184,15 +196,16 @@ function getSelectedMode() {
 
 function collectStartPayload() {
   const form = new FormData(els.setupForm);
+  const mode = form.get("mode");
+  const isKnowledgeOnly = mode === "knowledge";
   return {
-    mode: form.get("mode"),
+    mode,
     interview_length: form.get("interview_length") || "standard",
     scenario: els.scenario.value,
-    style: els.style.value,
     major: els.major.value.trim(),
     target_profile: els.targetProfile.value.trim(),
-    project: els.project.value.trim(),
-    focus: els.focus.value.trim(),
+    project: isKnowledgeOnly ? "" : els.project.value.trim(),
+    focus: isKnowledgeOnly ? "" : els.focus.value.trim(),
   };
 }
 
@@ -258,7 +271,6 @@ function fillFormFromSession(session) {
   const lengthInput = document.querySelector(`input[name="interview_length"][value="${input.interview_length || "standard"}"]`);
   if (lengthInput) lengthInput.checked = true;
   els.scenario.value = input.scenario;
-  els.style.value = input.style;
   els.major.value = input.major;
   els.targetProfile.value = input.target_profile || "";
   els.project.value = input.project || "";
@@ -291,7 +303,7 @@ function render() {
   els.sessionView.classList.remove("hidden");
   renderSetupSummary(session);
   els.modeLabel.textContent = modeLabels[session.input.mode] || "训练";
-  els.styleLabel.textContent = `${session.input.scenario} · ${session.input.style}`;
+  els.scenarioLabel.textContent = session.input.scenario;
   const nextRound = Math.min(session.turns.length + 1, session.max_rounds);
   const phase = getRoundPhase(session, nextRound);
   els.roundLabel.textContent =
@@ -330,8 +342,11 @@ function describePhasePlan(session) {
 function renderSetupSummary(session) {
   const input = session.input;
   const topRisk = [...(session.risk_radar || [])].sort((a, b) => b.level - a.level)[0];
-  const projectTitle = session.project_map?.theme || input.project || "基础知识问诊";
-  const shortProjectTitle = projectTitle.length > 150 ? `${projectTitle.slice(0, 150)}...` : projectTitle;
+  const summarySource =
+    input.mode === "knowledge"
+      ? input.target_profile || input.major || "基础知识问诊"
+      : session.project_map?.theme || input.project || "项目经历待补充";
+  const shortSummary = summarySource.length > 150 ? `${summarySource.slice(0, 150)}...` : summarySource;
   els.setupSummary.classList.remove("hidden");
   els.setupForm.classList.add("hidden");
   els.setupSummary.innerHTML = `
@@ -340,7 +355,6 @@ function renderSetupSummary(session) {
       <h3>${escapeHtml(modeLabels[input.mode] || "训练")}</h3>
       <div class="summary-tags">
         <span>${escapeHtml(input.scenario)}</span>
-        <span>${escapeHtml(input.style)}</span>
         <span>${escapeHtml(lengthLabelForSession(session))}</span>
       </div>
       <dl>
@@ -354,8 +368,8 @@ function renderSetupSummary(session) {
             : ""
         }
         <div>
-          <dt>${input.mode === "knowledge" ? "训练重点" : "项目摘要"}</dt>
-          <dd>${escapeHtml(shortProjectTitle)}</dd>
+          <dt>${input.mode === "knowledge" ? "知识问诊依据" : "项目摘要"}</dt>
+          <dd>${escapeHtml(shortSummary)}</dd>
         </div>
         ${
           topRisk
@@ -403,7 +417,7 @@ function renderInsights(session) {
       ${tabs
         .map(
           (tab) => `
-            <button class="${tab.id === active.id ? "active" : ""}" type="button" data-insight-tab="${tab.id}">
+            <button class="${tab.id === active.id ? "active" : ""}" type="button" data-insight-tab="${tab.id}" data-tip="${escapeHtml(tab.tip || "切换辅助分析视图")}">
               ${escapeHtml(tab.label)}
             </button>
           `,
@@ -420,6 +434,7 @@ function getInsightTabs(session) {
     tabs.push({
       id: "risk",
       label: "风险",
+      tip: "查看最容易被追问的项目风险维度",
       render: () => `
         <h3>追问风险摘要</h3>
         <div class="risk-list">
@@ -449,6 +464,7 @@ function getInsightTabs(session) {
     tabs.push({
       id: "map",
       label: "脉络",
+      tip: "查看系统提取的项目主题、动机、方法和贡献",
       render: () => `
         <h3>项目脉络图</h3>
         <ul class="map-list">
@@ -466,6 +482,7 @@ function getInsightTabs(session) {
     tabs.push({
       id: "knowledge",
       label: "知识",
+      tip: "查看基于申请目标生成的基础知识点",
       render: () => `
         <h3>知识点清单</h3>
         <ul class="knowledge-list">
@@ -757,7 +774,6 @@ function fillSampleForm() {
   document.querySelector('input[name="mode"][value="mixed"]').checked = true;
   document.querySelector('input[name="interview_length"][value="standard"]').checked = true;
   els.scenario.value = "保研复试";
-  els.style.value = "严格导师型";
   els.major.value = "人工智能专业，大三，做过机器学习和计算机视觉课程项目";
   els.targetProfile.value =
     "保研申请智能感知与机器人实验室，导师方向包括计算机视觉、多模态感知和机器人操作，希望重点展示自己具备可靠实验设计、模型理解和工程落地能力。";
@@ -780,6 +796,10 @@ els.enterWorkbenchBtn.addEventListener("click", () => {
 els.landingSampleBtn.addEventListener("click", () => {
   fillSampleForm();
   showWorkbench();
+});
+
+els.homeBtn.addEventListener("click", () => {
+  showLanding();
 });
 
 els.clearInputsBtn.addEventListener("click", () => {

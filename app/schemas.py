@@ -9,17 +9,17 @@ from pydantic import BaseModel, ConfigDict, Field
 TrainingMode = Literal["knowledge", "project", "mixed"]
 InterviewLength = Literal["short", "standard", "deep"]
 InterviewScenario = Literal["保研复试", "科研项目答辩", "课程项目展示", "实验室面试", "技术类实习面试"]
-FollowupStyle = Literal["温和学长型", "严格导师型", "压力追问型"]
 SessionStatus = Literal["interview", "finished"]
 
 
 class StartRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
     scenario: InterviewScenario
     major: str = Field(min_length=2, max_length=120)
     target_profile: str = Field(default="", max_length=1200)
     project: str = Field(default="", max_length=6000)
     focus: str = Field(default="", max_length=800)
-    style: FollowupStyle
     mode: TrainingMode
     interview_length: InterviewLength = "standard"
 

@@ -32,7 +32,7 @@ class InterviewEngine:
     async def start(self, request: StartRequest) -> SessionState:
         fallback = self._fallback_initial(request)
         result = await self.llm.complete_json(self._initial_messages(request), temperature=0.35)
-        initial = self._merge_initial(fallback, result)
+        initial = self._merge_initial(request, fallback, result)
         now = datetime.utcnow()
         session = SessionState(
             session_id=uuid4().hex,
@@ -124,6 +124,9 @@ class InterviewEngine:
         project_context = request.project or "未提供完整项目"
         if not needs_project:
             project_context = "本模式不使用项目经历作为基础知识出题依据。"
+        focus_context = request.focus or "未特别说明"
+        if request.mode == "knowledge":
+            focus_context = "本模式忽略项目训练重点；基础知识只按申请/面试目标出题。"
         return [
             {
                 "role": "system",
@@ -146,8 +149,7 @@ class InterviewEngine:
                     f"专业背景：{request.major}\n"
                     f"申请/面试目标：{request.target_profile or '未特别说明'}\n"
                     f"基础知识问诊依据：{request.target_profile or '申请目标未明确时才退回专业背景'}；不要使用项目经历补全知识点。\n"
-                    f"追问风格：{request.style}\n"
-                    f"用户想训练方向：{request.focus or '未特别说明'}\n"
+                    f"用户想训练方向：{focus_context}\n"
                     f"项目经历：{project_context}\n\n"
                     "请生成本轮训练的结构化入口数据。\n"
                     f"{project_rule}\n{knowledge_rule}\n"
@@ -194,14 +196,15 @@ class InterviewEngine:
                     f"当前是第 {round_index}/{session.max_rounds} 轮。\n"
                     f"当前阶段：{PHASE_LABELS[current_phase]}\n"
                     f"下一轮阶段：{PHASE_LABELS[next_phase]}\n"
-                    f"会话状态 JSON：{self._session_brief(session)}\n"
+                    f"会话状态 JSON：{self._session_brief(session, phase=next_phase)}\n"
                     f"本轮问题：{session.current_question}\n"
                     f"用户回答：{answer_text.strip()}\n\n"
                     "请给出本轮即时反馈，并生成下一轮追问。"
                     "下一轮问题必须承接用户回答中的具体表述，同时符合下一轮阶段。"
                     "若下一轮是项目追问，必须落到项目动机、方法选择、可靠性、贡献、结果解释、创新不足中的一个漏洞。"
                     "若下一轮是基础知识问诊，必须优先依据申请/面试目标提出直接知识题，覆盖目标方向的基础概念、核心课程、数学/工程基础、方法边界和应用条件；专业背景只用于校准难度；不要引用项目经历，不要追问项目实现细节，不要把项目问题标成基础知识。"
-                    "若追问风格是压力追问型，问题可以更尖锐，但不要羞辱用户。\n\n"
+                    "从项目追问切到基础知识时，不要承接本轮答案里的项目对象、数据集、模型名、指标名或参数词，只能承接“回答缺少概念/证据/边界”这类能力短板。"
+                    "问题保持真实面试官口吻，直接追问关键概念、证据和边界，不要使用产品说明式措辞。\n\n"
                     "返回 JSON 格式："
                     "{"
                     '"feedback":{"strengths":[],"gaps":[],"suggestions":[],"answer_frame":[],"score":80,"score_reason":"","rewrite":""},'
@@ -212,6 +215,7 @@ class InterviewEngine:
         ]
 
     def _final_turn_messages(self, session: SessionState, answer_text: str, round_index: int) -> list[dict[str, str]]:
+        current_phase = self._phase_for_round(session, round_index)
         return [
             {
                 "role": "system",
@@ -226,8 +230,8 @@ class InterviewEngine:
                 "role": "user",
                 "content": (
                     f"当前是第 {round_index}/{session.max_rounds} 轮，也是最后一轮。\n"
-                    f"当前阶段：{PHASE_LABELS[self._phase_for_round(session, round_index)]}\n"
-                    f"会话状态 JSON：{self._session_brief(session)}\n"
+                    f"当前阶段：{PHASE_LABELS[current_phase]}\n"
+                    f"会话状态 JSON：{self._session_brief(session, phase=current_phase)}\n"
                     f"本轮问题：{session.current_question}\n"
                     f"用户回答：{answer_text.strip()}\n"
                     "请只给出本轮即时反馈，不要再生成下一题。"
@@ -275,7 +279,7 @@ class InterviewEngine:
         project_rounds = max(1, session.max_rounds // 2)
         return "project" if round_number <= project_rounds else "knowledge"
 
-    def _merge_initial(self, fallback: dict, result: dict | None) -> dict:
+    def _merge_initial(self, request: StartRequest, fallback: dict, result: dict | None) -> dict:
         if result is None:
             return fallback
 
@@ -300,14 +304,18 @@ class InterviewEngine:
         knowledge = []
         for item in result.get("knowledge_points", [])[:8]:
             try:
-                knowledge.append(KnowledgePoint.model_validate(item))
+                point = KnowledgePoint.model_validate(item)
             except ValidationError:
                 continue
+            point_text = f"{point.name} {point.why_relevant} {point.probe_example}"
+            if self._is_project_leaking_knowledge_question(request, point_text):
+                continue
+            knowledge.append(point)
         if knowledge or merged["knowledge_points"]:
             merged["knowledge_points"] = knowledge or merged["knowledge_points"]
 
         opening = str(result.get("opening_question", "")).strip()
-        if opening:
+        if opening and (request.mode != "knowledge" or not self._is_project_leaking_knowledge_question(request, opening)):
             merged["opening_question"] = opening
         return merged
 
@@ -327,6 +335,9 @@ class InterviewEngine:
         next_question = str(result.get("next_question", "")).strip() or self._fallback_next_question(
             session, round_index + 1
         )
+        next_phase = self._phase_for_round(session, round_index + 1)
+        if next_phase == "knowledge" and self._is_project_leaking_knowledge_question(session.input, next_question):
+            next_question = self._fallback_next_question(session, round_index + 1)
         return feedback, next_question
 
     def _merge_final_turn_feedback(self, result: dict | None, fallback_feedback: Feedback) -> Feedback:
@@ -423,6 +434,38 @@ class InterviewEngine:
         if scores:
             report.total_score = round(sum(scores) / len(scores))
         return report
+
+    def _is_project_leaking_knowledge_question(self, request: StartRequest, text: str) -> bool:
+        project_text = f"{request.project} {request.focus}".lower()
+        if not project_text.strip():
+            return False
+        target_text = (request.target_profile or "").lower()
+        question_text = text.lower()
+        explicit_terms = [
+            "安全帽",
+            "佩戴",
+            "头盔",
+            "监控画面",
+            "光照",
+            "遮挡",
+            "误检",
+            "漏检",
+            "置信度",
+            "阈值",
+            "输入尺寸",
+            "数据增强",
+            "训练脚本",
+        ]
+        for term in explicit_terms:
+            needle = term.lower()
+            if needle in project_text and needle in question_text and needle not in target_text:
+                return True
+
+        for term in re.findall(r"[A-Za-z][A-Za-z0-9_.+-]{2,}", project_text):
+            needle = term.lower()
+            if needle in question_text and needle not in target_text:
+                return True
+        return False
 
     def _fallback_initial(self, request: StartRequest) -> dict:
         needs_project = request.mode in {"project", "mixed"}
@@ -616,7 +659,39 @@ class InterviewEngine:
             level = "整体回答暴露出较多可追问漏洞"
         return f"你完成了 {answered} 轮回答，平均得分约 {avg} 分，{level}。后续需要把项目叙述从“做了什么”进一步推进到“为什么这样做、证据是什么、局限在哪里”。"
 
-    def _session_brief(self, session: SessionState, include_turns: bool = False) -> str:
+    def _session_brief(
+        self,
+        session: SessionState,
+        include_turns: bool = False,
+        phase: str | None = None,
+    ) -> str:
+        if phase == "knowledge":
+            knowledge_turns = [
+                turn
+                for turn in session.turns
+                if self._phase_for_round(session, turn.round_index) == "knowledge"
+            ]
+            history_source = knowledge_turns if include_turns else knowledge_turns[-3:]
+            data = {
+                "mode": session.input.mode,
+                "interview_length": session.input.interview_length,
+                "max_rounds": session.max_rounds,
+                "scenario": session.input.scenario,
+                "major": session.input.major,
+                "target_profile": session.input.target_profile,
+                "knowledge_points": [item.model_dump() for item in session.knowledge_points],
+                "history": [
+                    {
+                        "round": turn.round_index,
+                        "question": turn.question,
+                        "answer": turn.answer if include_turns else turn.answer[:180],
+                        "feedback": turn.feedback.model_dump() if include_turns else None,
+                    }
+                    for turn in history_source
+                ],
+            }
+            return json.dumps(data, ensure_ascii=False)
+
         data = {
             "mode": session.input.mode,
             "interview_length": session.input.interview_length,
@@ -625,7 +700,6 @@ class InterviewEngine:
             "major": session.input.major,
             "target_profile": session.input.target_profile,
             "focus": session.input.focus,
-            "style": session.input.style,
             "project_map": session.project_map.model_dump() if session.project_map else None,
             "risk_radar": [item.model_dump() for item in session.risk_radar],
             "knowledge_points": [item.model_dump() for item in session.knowledge_points],
