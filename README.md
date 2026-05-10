@@ -73,6 +73,12 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 http://127.0.0.1:8000
 ```
 
+快速检查核心闭环：
+
+```bash
+python scripts/smoke_test.py
+```
+
 ## Ubuntu 22.04 部署
 
 目标服务器：
@@ -138,4 +144,3 @@ deploy/
 - 增加 Prompt 版本号和训练报告导出。
 - 增加更细的专业方向模板，例如 AI、电子、材料、物理实验、自动化控制。
 - 增加演示用种子案例，不影响真实训练入口。
-

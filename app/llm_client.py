@@ -40,6 +40,9 @@ class LLMClient:
         try:
             async with httpx.AsyncClient(timeout=timeout_seconds or self.settings.request_timeout_seconds) as client:
                 response = await client.post(self.settings.dashscope_chat_url, headers=headers, json=payload)
+                if response.status_code == 400 and "response_format" in response.text:
+                    payload.pop("response_format", None)
+                    response = await client.post(self.settings.dashscope_chat_url, headers=headers, json=payload)
                 response.raise_for_status()
         except httpx.HTTPStatusError as exc:
             body = exc.response.text[:400] if exc.response is not None else ""
@@ -82,4 +85,3 @@ class LLMClient:
             return value if isinstance(value, dict) else None
         except json.JSONDecodeError:
             return None
-
