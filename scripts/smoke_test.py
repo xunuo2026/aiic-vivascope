@@ -1,4 +1,5 @@
 from pathlib import Path
+import os
 import sys
 
 from fastapi.testclient import TestClient
@@ -7,6 +8,9 @@ from fastapi.testclient import TestClient
 ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
+
+os.environ["DASHSCOPE_API_KEY"] = ""
+os.environ["QWEN_MODEL"] = ""
 
 from app.main import app
 
@@ -29,6 +33,7 @@ def main() -> None:
 
     payload = {
         "mode": "mixed",
+        "interview_length": "short",
         "scenario": "保研复试",
         "style": "严格导师型",
         "major": "人工智能专业，大三，做过机器学习和计算机视觉课程项目",
@@ -44,19 +49,22 @@ def main() -> None:
     response.raise_for_status()
     session = response.json()["session"]
     session_id = session["session_id"]
+    assert session["max_rounds"] == 6
 
     answer = (
         "我的结论是这个项目主要解决实验室安全管理中的实时检测问题。"
         "我负责数据整理、训练脚本和参数对比，用 mAP、误检率和不同光照场景测试来验证，"
         "但数据量和遮挡场景仍是局限。"
     )
-    for _ in range(6):
+    for _ in range(session["max_rounds"]):
         response = client.post(f"/api/sessions/{session_id}/answer", json={"answer": answer})
         response.raise_for_status()
         session = response.json()["session"]
 
     assert session["status"] == "finished"
     assert session["final_report"]["total_score"] >= 0
+    assert session["final_report"]["answer_summary"]
+    assert session["final_report"]["overall_advice"]
     print("smoke-ok", session["final_report"]["total_score"])
 
 

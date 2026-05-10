@@ -53,6 +53,25 @@
               </div>
             </fieldset>
 
+            <fieldset>
+              <legend>训练长度</legend>
+              <div class="segmented-control length-control">
+                <label>
+                  <input type="radio" name="interview_length" value="short" />
+                  <span id="lengthShortLabel">快速</span>
+                </label>
+                <label>
+                  <input type="radio" name="interview_length" value="standard" checked />
+                  <span id="lengthStandardLabel">标准</span>
+                </label>
+                <label>
+                  <input type="radio" name="interview_length" value="deep" />
+                  <span id="lengthDeepLabel">深度</span>
+                </label>
+              </div>
+              <p id="lengthHint" class="field-hint">项目追问/基础知识：3、6、9 轮；综合模拟：6、12、18 轮。</p>
+            </fieldset>
+
             <div class="form-grid">
               <label>
                 <span>面试场景</span>
@@ -118,7 +137,13 @@
           <div id="emptyState" class="empty-state">
             <p class="eyebrow">Step 2</p>
             <h2>从项目脉络开始，而不是从空聊天框开始</h2>
-            <p>生成后会看到项目脉络图、追问风险雷达、知识点清单，并进入 6 轮一问一答模拟。</p>
+            <p>生成后会看到项目脉络图、追问风险摘要和知识点清单，并按你选择的长度进入一问一答模拟。</p>
+          </div>
+
+          <div id="loadingOverlay" class="loading-overlay hidden" aria-live="assertive">
+            <div class="spinner"></div>
+            <strong id="loadingTitle">面试官正在思考</strong>
+            <p id="loadingHint">正在分析你的材料，请稍等。</p>
           </div>
 
           <div id="sessionView" class="session-view hidden">
@@ -142,7 +167,7 @@
                     <p class="eyebrow">面试官追问</p>
                     <span id="styleLabel"></span>
                   </div>
-                  <span class="live-badge">一问一答</span>
+                  <span id="phaseBadge" class="live-badge">项目追问</span>
                 </div>
                 <p id="currentQuestion" class="question-text"></p>
                 <form id="answerForm" class="answer-form">

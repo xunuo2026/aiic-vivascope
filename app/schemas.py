@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 TrainingMode = Literal["knowledge", "project", "mixed"]
+InterviewLength = Literal["short", "standard", "deep"]
 InterviewScenario = Literal["保研复试", "科研项目答辩", "课程项目展示", "实验室面试", "技术类实习面试"]
 FollowupStyle = Literal["温和学长型", "严格导师型", "压力追问型"]
 SessionStatus = Literal["interview", "finished"]
@@ -19,6 +20,7 @@ class StartRequest(BaseModel):
     focus: str = Field(default="", max_length=800)
     style: FollowupStyle
     mode: TrainingMode
+    interview_length: InterviewLength = "standard"
 
 
 class ProjectMap(BaseModel):
@@ -59,10 +61,12 @@ class Turn(BaseModel):
 
 class FinalReport(BaseModel):
     total_score: int = Field(ge=0, le=100)
+    answer_summary: str = ""
     most_vulnerable_project_points: list[str] = Field(default_factory=list)
     knowledge_weaknesses: list[str] = Field(default_factory=list)
     expression_issues: list[str] = Field(default_factory=list)
     next_training_tasks: list[str] = Field(default_factory=list)
+    overall_advice: str = ""
     closing_comment: str
 
 
@@ -102,4 +106,3 @@ class AnswerResponse(BaseModel):
 
 class RestoreRequest(BaseModel):
     session: SessionState
-

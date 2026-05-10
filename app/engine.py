@@ -21,6 +21,8 @@ from app.schemas import (
 
 
 RISK_DIMENSIONS = ["项目动机", "方法选择", "实验/实现可靠性", "个人贡献", "结果解释", "创新性与不足"]
+ROUND_COUNTS = {"short": 3, "standard": 6, "deep": 9}
+PHASE_LABELS = {"project": "项目追问", "knowledge": "基础知识问诊"}
 
 
 class InterviewEngine:
@@ -36,6 +38,7 @@ class InterviewEngine:
             session_id=uuid4().hex,
             created_at=now,
             updated_at=now,
+            max_rounds=self._round_count(request),
             input=request,
             project_map=initial["project_map"],
             risk_radar=initial["risk_radar"],
@@ -131,6 +134,7 @@ class InterviewEngine:
                 "role": "user",
                 "content": (
                     f"训练模式：{request.mode}\n"
+                    f"训练长度：{request.interview_length}（共 {self._round_count(request)} 轮）\n"
                     f"面试场景：{request.scenario}\n"
                     f"专业背景：{request.major}\n"
                     f"追问风格：{request.style}\n"
@@ -155,6 +159,8 @@ class InterviewEngine:
         ]
 
     def _turn_messages(self, session: SessionState, answer_text: str, round_index: int) -> list[dict[str, str]]:
+        current_phase = self._phase_for_round(session, round_index)
+        next_phase = self._phase_for_round(session, round_index + 1)
         return [
             {
                 "role": "system",
@@ -163,6 +169,7 @@ class InterviewEngine:
                     "每轮必须基于项目脉络、风险雷达、知识点清单和上一轮回答继续追问，不能随机出通用题。"
                     "你可以使用这些分析依据，但不能在问题里说出“风险雷达”“知识点清单”“训练模式”“本系统”等产品词。"
                     "问题必须像真实老师/导师当面追问，直接、自然、可回答。"
+                    "综合模拟需要分阶段：项目追问阶段只深挖项目，基础知识问诊阶段从项目相关概念自然切入。"
                     "每轮反馈要短，但要具体指出漏洞和更稳妥的回答框架。"
                     "请只返回严格 JSON。"
                 ),
@@ -170,14 +177,16 @@ class InterviewEngine:
             {
                 "role": "user",
                 "content": (
-                    f"当前是第 {round_index}/6 轮。\n"
+                    f"当前是第 {round_index}/{session.max_rounds} 轮。\n"
+                    f"当前阶段：{PHASE_LABELS[current_phase]}\n"
+                    f"下一轮阶段：{PHASE_LABELS[next_phase]}\n"
                     f"会话状态 JSON：{self._session_brief(session)}\n"
                     f"本轮问题：{session.current_question}\n"
                     f"用户回答：{answer_text.strip()}\n\n"
                     "请给出本轮即时反馈，并生成下一轮追问。"
-                    "下一轮问题必须承接用户回答中的具体表述，同时落到一个尚未充分覆盖的风险维度或项目相关知识点。"
-                    "若模式是 mixed，项目追问为主，最多穿插一个基础知识点。"
-                    "知识点必须从项目细节自然切入，例如“你刚才说 mAP 提升，你怎么判断不是过拟合造成的？”"
+                    "下一轮问题必须承接用户回答中的具体表述，同时符合下一轮阶段。"
+                    "若下一轮是项目追问，必须落到项目动机、方法选择、可靠性、贡献、结果解释、创新不足中的一个漏洞。"
+                    "若下一轮是基础知识问诊，必须从项目细节自然切入，例如“你刚才说 mAP 提升，你怎么判断不是过拟合造成的？”"
                     "若追问风格是压力追问型，问题可以更尖锐，但不要羞辱用户。\n\n"
                     "返回 JSON 格式："
                     "{"
@@ -199,7 +208,8 @@ class InterviewEngine:
             {
                 "role": "user",
                 "content": (
-                    f"当前是第 {round_index}/6 轮，也是最后一轮。\n"
+                    f"当前是第 {round_index}/{session.max_rounds} 轮，也是最后一轮。\n"
+                    f"当前阶段：{PHASE_LABELS[self._phase_for_round(session, round_index)]}\n"
                     f"会话状态 JSON：{self._session_brief(session)}\n"
                     f"本轮问题：{session.current_question}\n"
                     f"用户回答：{answer_text.strip()}\n"
@@ -226,14 +236,26 @@ class InterviewEngine:
                 "content": (
                     f"完整会话 JSON：{self._session_brief(session, include_turns=True)}\n"
                     "请生成最终复盘。必须包含：总评分、项目最容易被问穿的点、知识薄弱点、表达问题、下一轮训练任务。"
+                    "还必须用 2-3 句话简短总结用户本轮所有回答的总体表现，并给出一句直接、可执行的总体建议。"
                     "返回 JSON 格式："
                     "{"
-                    '"final_report":{"total_score":78,"most_vulnerable_project_points":[],"knowledge_weaknesses":[],'
-                    '"expression_issues":[],"next_training_tasks":[],"closing_comment":""}'
+                    '"final_report":{"total_score":78,"answer_summary":"","most_vulnerable_project_points":[],"knowledge_weaknesses":[],"expression_issues":[],"next_training_tasks":[],"overall_advice":"","closing_comment":""}'
                     "}"
                 ),
             },
         ]
+
+    def _round_count(self, request: StartRequest) -> int:
+        base_rounds = ROUND_COUNTS.get(request.interview_length, ROUND_COUNTS["standard"])
+        return base_rounds * 2 if request.mode == "mixed" else base_rounds
+
+    def _phase_for_round(self, session: SessionState, round_number: int) -> str:
+        if session.input.mode == "project":
+            return "project"
+        if session.input.mode == "knowledge":
+            return "knowledge"
+        project_rounds = max(1, session.max_rounds // 2)
+        return "project" if round_number <= project_rounds else "knowledge"
 
     def _merge_initial(self, fallback: dict, result: dict | None) -> dict:
         if result is None:
@@ -399,14 +421,22 @@ class InterviewEngine:
 
     def _fallback_next_question(self, session: SessionState, round_number: int) -> str:
         mode = session.input.mode
-        if mode == "knowledge":
+        phase = self._phase_for_round(session, round_number)
+        if phase == "knowledge":
             points = session.knowledge_points or self._fallback_knowledge(session.input)
             point = points[(round_number - 1) % len(points)]
-            templates = [
-                f"刚才你提到的解释还可以更落到条件上。请说明“{point.name}”成立需要哪些前提？如果前提不满足，会出现什么误判？",
-                f"你能用一个具体例子说明“{point.name}”会怎样影响方法选择或结果解释吗？",
-                f"如果让你把“{point.name}”讲给不做这个方向的老师听，你会如何用 3 句话讲清楚？",
-            ]
+            if mode == "mixed":
+                templates = [
+                    f"你刚才的项目解释里有一个关键基础问题：{point.probe_example}",
+                    f"你提到的方法和结果都依赖“{point.name}”。这个概念如果理解错，会怎样影响你的实验结论？",
+                    f"如果老师继续追问“{point.name}”的适用条件，你会怎么用项目里的例子说明？",
+                ]
+            else:
+                templates = [
+                    f"刚才你提到的解释还可以更落到条件上。请说明“{point.name}”成立需要哪些前提？如果前提不满足，会出现什么误判？",
+                    f"你能用一个具体例子说明“{point.name}”会怎样影响方法选择或结果解释吗？",
+                    f"如果让你把“{point.name}”讲给不做这个方向的老师听，你会如何用 3 句话讲清楚？",
+                ]
             return templates[(round_number - 1) % len(templates)]
 
         risk = (session.risk_radar or self._fallback_risks(session.input))[(round_number - 1) % 6]
@@ -419,9 +449,6 @@ class InterviewEngine:
             "创新性与不足": "请不要只说“有创新”。你的创新点具体相对谁而言？目前最大的不足又会怎样影响结论？",
         }
         question = project_templates.get(risk.dimension, project_templates["方法选择"])
-        if mode == "mixed" and round_number in {3, 5} and session.knowledge_points:
-            point = session.knowledge_points[(round_number - 1) % len(session.knowledge_points)]
-            question += f" 你刚才的判断还牵涉到“{point.name}”，这个概念在你的项目里具体影响哪一步？"
         return question
 
     def _fallback_final_report(self, session: SessionState) -> FinalReport:
@@ -438,6 +465,7 @@ class InterviewEngine:
             expression.append("表达基本完整，下一步应提升追问下的取舍说明。")
         return FinalReport(
             total_score=total,
+            answer_summary=self._fallback_answer_summary(session),
             most_vulnerable_project_points=[
                 f"{item.dimension}：{item.reason}" for item in high_risks
             ] or ["本轮以基础知识为主，项目风险未展开。"],
@@ -448,12 +476,29 @@ class InterviewEngine:
                 "为最高风险维度各写一个“结论-依据-局限”三段式回答。",
                 "整理 3 个可能被问到的项目相关基础概念，并各准备一个反例或边界条件。",
             ],
+            overall_advice="下一轮优先把每个关键判断都绑定到数据、对照实验和个人贡献边界上。",
             closing_comment="本轮训练已经暴露出可优先修补的追问点。下一轮建议围绕最高风险维度做更高压力的连续追问。",
         )
+
+    def _fallback_answer_summary(self, session: SessionState) -> str:
+        if not session.turns:
+            return "本轮尚未形成可复盘的回答记录。"
+        scores = [turn.feedback.score for turn in session.turns]
+        avg = round(sum(scores) / len(scores))
+        answered = len(session.turns)
+        if avg >= 80:
+            level = "整体回答较完整"
+        elif avg >= 65:
+            level = "整体回答能覆盖问题，但证据链还不够稳定"
+        else:
+            level = "整体回答暴露出较多可追问漏洞"
+        return f"你完成了 {answered} 轮回答，平均得分约 {avg} 分，{level}。后续需要把项目叙述从“做了什么”进一步推进到“为什么这样做、证据是什么、局限在哪里”。"
 
     def _session_brief(self, session: SessionState, include_turns: bool = False) -> str:
         data = {
             "mode": session.input.mode,
+            "interview_length": session.input.interview_length,
+            "max_rounds": session.max_rounds,
             "scenario": session.input.scenario,
             "major": session.input.major,
             "focus": session.input.focus,

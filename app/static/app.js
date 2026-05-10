@@ -8,6 +8,10 @@ const els = {
   resetBtn: document.querySelector("#resetBtn"),
   setupSummary: document.querySelector("#setupSummary"),
   startBtn: document.querySelector("#startBtn"),
+  lengthShortLabel: document.querySelector("#lengthShortLabel"),
+  lengthStandardLabel: document.querySelector("#lengthStandardLabel"),
+  lengthDeepLabel: document.querySelector("#lengthDeepLabel"),
+  lengthHint: document.querySelector("#lengthHint"),
   scenario: document.querySelector("#scenario"),
   style: document.querySelector("#style"),
   major: document.querySelector("#major"),
@@ -18,7 +22,11 @@ const els = {
   modeLabel: document.querySelector("#modeLabel"),
   styleLabel: document.querySelector("#styleLabel"),
   roundLabel: document.querySelector("#roundLabel"),
+  phaseBadge: document.querySelector("#phaseBadge"),
   warningBox: document.querySelector("#warningBox"),
+  loadingOverlay: document.querySelector("#loadingOverlay"),
+  loadingTitle: document.querySelector("#loadingTitle"),
+  loadingHint: document.querySelector("#loadingHint"),
   insightGrid: document.querySelector("#insightGrid"),
   currentQuestion: document.querySelector("#currentQuestion"),
   answerForm: document.querySelector("#answerForm"),
@@ -41,6 +49,23 @@ const modeLabels = {
   knowledge: "只练基础知识回答能力",
 };
 
+const baseLengthLabels = {
+  short: "快速",
+  standard: "标准",
+  deep: "深度",
+};
+
+const baseRoundCounts = {
+  short: 3,
+  standard: 6,
+  deep: 9,
+};
+
+const phaseLabels = {
+  project: "项目追问",
+  knowledge: "基础知识问诊",
+};
+
 function escapeHtml(value = "") {
   return String(value)
     .replaceAll("&", "&amp;")
@@ -54,16 +79,21 @@ function listHtml(items = []) {
   return items.length ? items.map((item) => `<li>${escapeHtml(item)}</li>`).join("") : "<li>暂无</li>";
 }
 
-function setBusy(isBusy, label = "处理中") {
+function setBusy(isBusy, label = "处理中", hint = "") {
   state.busy = isBusy;
+  document.body.classList.toggle("is-busy", isBusy);
   els.startBtn.disabled = isBusy;
   els.answerBtn.disabled = isBusy;
   if (isBusy) {
     els.startBtn.querySelector("span").textContent = label;
     els.answerBtn.querySelector("span").textContent = label;
+    els.loadingOverlay.classList.remove("hidden");
+    els.loadingTitle.textContent = label;
+    els.loadingHint.textContent = hint || "面试官正在分析材料和上一轮回答，请稍等。";
   } else {
     els.startBtn.querySelector("span").textContent = "生成训练";
     els.answerBtn.querySelector("span").textContent = "提交回答";
+    els.loadingOverlay.classList.add("hidden");
   }
 }
 
@@ -99,8 +129,10 @@ function getSelectedMode() {
 }
 
 function collectStartPayload() {
+  const form = new FormData(els.setupForm);
   return {
-    mode: getSelectedMode(),
+    mode: form.get("mode"),
+    interview_length: form.get("interview_length") || "standard",
     scenario: els.scenario.value,
     style: els.style.value,
     major: els.major.value.trim(),
@@ -109,11 +141,34 @@ function collectStartPayload() {
   };
 }
 
+function roundsForMode(mode, length) {
+  const base = baseRoundCounts[length || "standard"] || baseRoundCounts.standard;
+  return mode === "mixed" ? base * 2 : base;
+}
+
+function lengthLabelForMode(mode, length) {
+  const key = length || "standard";
+  return `${baseLengthLabels[key] || "标准"} ${roundsForMode(mode, key)} 轮`;
+}
+
+function updateLengthLabels() {
+  const mode = getSelectedMode();
+  els.lengthShortLabel.textContent = lengthLabelForMode(mode, "short");
+  els.lengthStandardLabel.textContent = lengthLabelForMode(mode, "standard");
+  els.lengthDeepLabel.textContent = lengthLabelForMode(mode, "deep");
+  els.lengthHint.textContent =
+    mode === "mixed"
+      ? "综合模拟 = 完整项目追问 + 完整基础问诊：6、12、18 轮。"
+      : "单项训练可选快速、标准、深度：3、6、9 轮。";
+}
+
 function fillFormFromSession(session) {
   if (!session) return;
   const input = session.input;
   const modeInput = document.querySelector(`input[name="mode"][value="${input.mode}"]`);
   if (modeInput) modeInput.checked = true;
+  const lengthInput = document.querySelector(`input[name="interview_length"][value="${input.interview_length || "standard"}"]`);
+  if (lengthInput) lengthInput.checked = true;
   els.scenario.value = input.scenario;
   els.style.value = input.style;
   els.major.value = input.major;
@@ -146,8 +201,10 @@ function render() {
   els.modeLabel.textContent = modeLabels[session.input.mode] || "训练";
   els.styleLabel.textContent = `${session.input.scenario} · ${session.input.style}`;
   const nextRound = Math.min(session.turns.length + 1, session.max_rounds);
+  const phase = getRoundPhase(session, nextRound);
   els.roundLabel.textContent =
     session.status === "finished" ? `已完成 ${session.max_rounds} 轮` : `第 ${nextRound} / ${session.max_rounds} 轮`;
+  els.phaseBadge.textContent = session.status === "finished" ? "复盘完成" : phaseLabels[phase];
 
   if (session.ai_warning) {
     els.warningBox.classList.remove("hidden");
@@ -161,6 +218,21 @@ function render() {
   renderHistory(session);
   renderReport(session);
   renderIcons();
+}
+
+function getRoundPhase(session, roundNumber) {
+  const mode = session.input.mode;
+  if (mode === "project") return "project";
+  if (mode === "knowledge") return "knowledge";
+  const projectRounds = Math.max(1, Math.floor(Number(session.max_rounds || 6) / 2));
+  return Number(roundNumber) <= projectRounds ? "project" : "knowledge";
+}
+
+function describePhasePlan(session) {
+  if (session.input.mode === "project") return `全程 ${session.max_rounds} 轮项目追问`;
+  if (session.input.mode === "knowledge") return `全程 ${session.max_rounds} 轮基础知识问诊`;
+  const projectRounds = Math.max(1, Math.floor(Number(session.max_rounds || 6) / 2));
+  return `${projectRounds} 轮项目追问 + ${session.max_rounds - projectRounds} 轮基础知识问诊`;
 }
 
 function renderSetupSummary(session) {
@@ -177,6 +249,7 @@ function renderSetupSummary(session) {
       <div class="summary-tags">
         <span>${escapeHtml(input.scenario)}</span>
         <span>${escapeHtml(input.style)}</span>
+        <span>${escapeHtml(lengthLabelForMode(input.mode, input.interview_length || "standard"))}</span>
       </div>
       <dl>
         <div>
@@ -192,6 +265,10 @@ function renderSetupSummary(session) {
             ? `<div><dt>最高风险</dt><dd>${escapeHtml(topRisk.dimension)} · ${topRisk.level}/5</dd></div>`
             : ""
         }
+        <div>
+          <dt>阶段安排</dt>
+          <dd>${escapeHtml(describePhasePlan(session))}</dd>
+        </div>
       </dl>
       <div class="summary-actions">
         <button id="summaryEditBtn" class="secondary-btn" type="button">
@@ -349,42 +426,43 @@ function renderHistory(session) {
     els.historyPanel.innerHTML = "";
     return;
   }
-  const latest = session.turns[session.turns.length - 1];
-  const previous = session.turns.slice(0, -1).reverse();
+  const turns = [...session.turns].reverse();
   els.historyPanel.innerHTML = `
     <div class="history-heading">
-      <h3>最近反馈</h3>
-      <span class="score-pill">${latest.feedback.score} 分</span>
+      <div>
+        <p class="eyebrow">Review Timeline</p>
+        <h3>回答复盘时间线</h3>
+      </div>
+      <span class="score-pill">${session.turns.length} / ${session.max_rounds} 轮</span>
     </div>
-    <article class="turn-card featured">
-      <div class="qa-block compact">
-        <p><strong>问：</strong>${escapeHtml(latest.question)}</p>
-        <p><strong>答：</strong>${escapeHtml(latest.answer)}</p>
-      </div>
-      <div class="feedback-grid">
-        ${feedbackBox("亮点", latest.feedback.strengths)}
-        ${feedbackBox("漏洞", latest.feedback.gaps)}
-        ${feedbackBox("补充点", latest.feedback.suggestions)}
-        ${feedbackBox("框架", latest.feedback.answer_frame)}
-      </div>
-    </article>
-    ${
-      previous.length
-        ? `<div class="history-list">
-            ${previous
-              .map(
-                (turn) => `
-                  <div class="history-row">
-                    <span>第 ${turn.round_index} 轮</span>
-                    <p>${escapeHtml(turn.question)}</p>
-                    <strong>${turn.feedback.score}</strong>
-                  </div>
-                `,
-              )
-              .join("")}
-          </div>`
-        : ""
-    }
+    <div class="turn-timeline">
+      ${turns
+        .map((turn, index) => {
+          const phase = getRoundPhase(session, turn.round_index);
+          return `
+            <details class="turn-detail" ${index === 0 ? "open" : ""}>
+              <summary>
+                <span>第 ${turn.round_index} 轮 · ${escapeHtml(phaseLabels[phase])}</span>
+                <p>${escapeHtml(turn.question)}</p>
+                <strong>${turn.feedback.score} 分</strong>
+              </summary>
+              <div class="turn-card">
+                <div class="qa-block compact">
+                  <p><strong>问：</strong>${escapeHtml(turn.question)}</p>
+                  <p><strong>答：</strong>${escapeHtml(turn.answer)}</p>
+                </div>
+                <div class="feedback-grid">
+                  ${feedbackBox("亮点", turn.feedback.strengths)}
+                  ${feedbackBox("漏洞", turn.feedback.gaps)}
+                  ${feedbackBox("补充点", turn.feedback.suggestions)}
+                  ${feedbackBox("框架", turn.feedback.answer_frame)}
+                </div>
+              </div>
+            </details>
+          `;
+        })
+        .join("")}
+    </div>
   `;
 }
 
@@ -412,6 +490,16 @@ function renderReport(session) {
         <h3>最终复盘报告</h3>
       </div>
       <p class="report-score"><strong>${report.total_score}</strong><span>/ 100</span></p>
+    </div>
+    <div class="report-summary">
+      <div>
+        <h4>回答概览</h4>
+        <p>${escapeHtml(report.answer_summary || report.closing_comment)}</p>
+      </div>
+      <div>
+        <h4>总体建议</h4>
+        <p>${escapeHtml(report.overall_advice || "下一轮优先补齐证据链、个人贡献边界和项目局限。")}</p>
+      </div>
     </div>
     <div class="report-grid">
       ${reportBlock("最容易被问穿的点", report.most_vulnerable_project_points)}
@@ -482,7 +570,7 @@ els.setupForm.addEventListener("submit", async (event) => {
     alert("项目追问或综合模拟需要至少填写一段项目经历。");
     return;
   }
-  setBusy(true, "生成中");
+  setBusy(true, "生成训练中", "正在提取项目脉络、标记追问风险，并准备第一轮问题。");
   try {
     const response = await api("/api/sessions", {
       method: "POST",
@@ -500,6 +588,12 @@ els.setupForm.addEventListener("submit", async (event) => {
   }
 });
 
+els.setupForm.addEventListener("change", (event) => {
+  if (event.target.name === "mode") {
+    updateLengthLabels();
+  }
+});
+
 els.answerForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (state.busy || !state.session) return;
@@ -508,7 +602,12 @@ els.answerForm.addEventListener("submit", async (event) => {
     alert("请先输入本轮回答。");
     return;
   }
-  setBusy(true, "追问中");
+  const isFinalRound = state.session.turns.length + 1 >= state.session.max_rounds;
+  setBusy(
+    true,
+    isFinalRound ? "生成复盘中" : "分析回答中",
+    isFinalRound ? "正在整理所有回答并生成整体报告。" : "面试官正在分析你的回答，并准备下一轮追问。",
+  );
   try {
     const response = await api(`/api/sessions/${state.session.session_id}/answer`, {
       method: "POST",
@@ -527,6 +626,7 @@ els.answerForm.addEventListener("submit", async (event) => {
 
 els.sampleBtn.addEventListener("click", () => {
   document.querySelector('input[name="mode"][value="mixed"]').checked = true;
+  document.querySelector('input[name="interview_length"][value="standard"]').checked = true;
   els.scenario.value = "保研复试";
   els.style.value = "严格导师型";
   els.major.value = "人工智能专业，大三，做过机器学习和计算机视觉课程项目";
@@ -576,4 +676,5 @@ els.insightGrid.addEventListener("click", (event) => {
 
 checkHealth();
 restoreSavedSession().then(render);
+updateLengthLabels();
 renderIcons();
